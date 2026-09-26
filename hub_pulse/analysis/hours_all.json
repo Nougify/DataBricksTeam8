@@ -1,0 +1,1730 @@
+[
+  {
+    "avg_pings": "173.6",
+    "day_type": "MF",
+    "departures": "15",
+    "hour": "0",
+    "hub": "Park Royal Mall",
+    "peak": "15.0"
+  },
+  {
+    "avg_pings": "126.7",
+    "day_type": "MF",
+    "departures": "15",
+    "hour": "1",
+    "hub": "Park Royal Mall",
+    "peak": "15.0"
+  },
+  {
+    "avg_pings": "108.1",
+    "day_type": "MF",
+    "departures": "1",
+    "hour": "2",
+    "hub": "Park Royal Mall",
+    "peak": "15.0"
+  },
+  {
+    "avg_pings": "99.9",
+    "day_type": "MF",
+    "departures": "0",
+    "hour": "3",
+    "hub": "Park Royal Mall",
+    "peak": "15.0"
+  },
+  {
+    "avg_pings": "100.0",
+    "day_type": "MF",
+    "departures": "0",
+    "hour": "4",
+    "hub": "Park Royal Mall",
+    "peak": "32.4"
+  },
+  {
+    "avg_pings": "134.0",
+    "day_type": "MF",
+    "departures": "15",
+    "hour": "5",
+    "hub": "Park Royal Mall",
+    "peak": "32.4"
+  },
+  {
+    "avg_pings": "233.8",
+    "day_type": "MF",
+    "departures": "47",
+    "hour": "6",
+    "hub": "Park Royal Mall",
+    "peak": "74.7"
+  },
+  {
+    "avg_pings": "407.2",
+    "day_type": "MF",
+    "departures": "63",
+    "hour": "7",
+    "hub": "Park Royal Mall",
+    "peak": "74.7"
+  },
+  {
+    "avg_pings": "642.0",
+    "day_type": "MF",
+    "departures": "65",
+    "hour": "8",
+    "hub": "Park Royal Mall",
+    "peak": "74.7"
+  },
+  {
+    "avg_pings": "755.1",
+    "day_type": "MF",
+    "departures": "58",
+    "hour": "9",
+    "hub": "Park Royal Mall",
+    "peak": "60.9"
+  },
+  {
+    "avg_pings": "942.1",
+    "day_type": "MF",
+    "departures": "46",
+    "hour": "10",
+    "hub": "Park Royal Mall",
+    "peak": "60.9"
+  },
+  {
+    "avg_pings": "1139.1",
+    "day_type": "MF",
+    "departures": "43",
+    "hour": "11",
+    "hub": "Park Royal Mall",
+    "peak": "60.9"
+  },
+  {
+    "avg_pings": "1304.8",
+    "day_type": "MF",
+    "departures": "43",
+    "hour": "12",
+    "hub": "Park Royal Mall",
+    "peak": "60.9"
+  },
+  {
+    "avg_pings": "1386.4",
+    "day_type": "MF",
+    "departures": "44",
+    "hour": "13",
+    "hub": "Park Royal Mall",
+    "peak": "60.9"
+  },
+  {
+    "avg_pings": "1376.8",
+    "day_type": "MF",
+    "departures": "48",
+    "hour": "14",
+    "hub": "Park Royal Mall",
+    "peak": "60.9"
+  },
+  {
+    "avg_pings": "1544.1",
+    "day_type": "MF",
+    "departures": "59",
+    "hour": "15",
+    "hub": "Park Royal Mall",
+    "peak": "80.3"
+  },
+  {
+    "avg_pings": "1538.0",
+    "day_type": "MF",
+    "departures": "61",
+    "hour": "16",
+    "hub": "Park Royal Mall",
+    "peak": "80.3"
+  },
+  {
+    "avg_pings": "1480.4",
+    "day_type": "MF",
+    "departures": "64",
+    "hour": "17",
+    "hub": "Park Royal Mall",
+    "peak": "80.3"
+  },
+  {
+    "avg_pings": "1263.7",
+    "day_type": "MF",
+    "departures": "53",
+    "hour": "18",
+    "hub": "Park Royal Mall",
+    "peak": "62.1"
+  },
+  {
+    "avg_pings": "923.9",
+    "day_type": "MF",
+    "departures": "44",
+    "hour": "19",
+    "hub": "Park Royal Mall",
+    "peak": "62.1"
+  },
+  {
+    "avg_pings": "684.8",
+    "day_type": "MF",
+    "departures": "36",
+    "hour": "20",
+    "hub": "Park Royal Mall",
+    "peak": "62.1"
+  },
+  {
+    "avg_pings": "515.6",
+    "day_type": "MF",
+    "departures": "29",
+    "hour": "21",
+    "hub": "Park Royal Mall",
+    "peak": "65.5"
+  },
+  {
+    "avg_pings": "344.2",
+    "day_type": "MF",
+    "departures": "27",
+    "hour": "22",
+    "hub": "Park Royal Mall",
+    "peak": "65.5"
+  },
+  {
+    "avg_pings": "244.2",
+    "day_type": "MF",
+    "departures": "24",
+    "hour": "23",
+    "hub": "Park Royal Mall",
+    "peak": "65.5"
+  },
+  {
+    "avg_pings": "222.9",
+    "day_type": "Sat",
+    "departures": "14",
+    "hour": "0",
+    "hub": "Park Royal Mall",
+    "peak": "5.3"
+  },
+  {
+    "avg_pings": "148.4",
+    "day_type": "Sat",
+    "departures": "12",
+    "hour": "1",
+    "hub": "Park Royal Mall",
+    "peak": "5.3"
+  },
+  {
+    "avg_pings": "118.0",
+    "day_type": "Sat",
+    "departures": "1",
+    "hour": "2",
+    "hub": "Park Royal Mall",
+    "peak": "5.3"
+  },
+  {
+    "avg_pings": "105.7",
+    "day_type": "Sat",
+    "departures": "0",
+    "hour": "3",
+    "hub": "Park Royal Mall",
+    "peak": "5.3"
+  },
+  {
+    "avg_pings": "100.7",
+    "day_type": "Sat",
+    "departures": "0",
+    "hour": "4",
+    "hub": "Park Royal Mall",
+    "peak": "22.6"
+  },
+  {
+    "avg_pings": "119.7",
+    "day_type": "Sat",
+    "departures": "11",
+    "hour": "5",
+    "hub": "Park Royal Mall",
+    "peak": "22.6"
+  },
+  {
+    "avg_pings": "177.1",
+    "day_type": "Sat",
+    "departures": "21",
+    "hour": "6",
+    "hub": "Park Royal Mall",
+    "peak": "56.5"
+  },
+  {
+    "avg_pings": "278.4",
+    "day_type": "Sat",
+    "departures": "32",
+    "hour": "7",
+    "hub": "Park Royal Mall",
+    "peak": "56.5"
+  },
+  {
+    "avg_pings": "448.0",
+    "day_type": "Sat",
+    "departures": "36",
+    "hour": "8",
+    "hub": "Park Royal Mall",
+    "peak": "56.5"
+  },
+  {
+    "avg_pings": "707.8",
+    "day_type": "Sat",
+    "departures": "40",
+    "hour": "9",
+    "hub": "Park Royal Mall",
+    "peak": "60.5"
+  },
+  {
+    "avg_pings": "1106.2",
+    "day_type": "Sat",
+    "departures": "43",
+    "hour": "10",
+    "hub": "Park Royal Mall",
+    "peak": "60.5"
+  },
+  {
+    "avg_pings": "1488.6",
+    "day_type": "Sat",
+    "departures": "43",
+    "hour": "11",
+    "hub": "Park Royal Mall",
+    "peak": "60.5"
+  },
+  {
+    "avg_pings": "1783.3",
+    "day_type": "Sat",
+    "departures": "43",
+    "hour": "12",
+    "hub": "Park Royal Mall",
+    "peak": "60.5"
+  },
+  {
+    "avg_pings": "1997.0",
+    "day_type": "Sat",
+    "departures": "45",
+    "hour": "13",
+    "hub": "Park Royal Mall",
+    "peak": "60.5"
+  },
+  {
+    "avg_pings": "2108.7",
+    "day_type": "Sat",
+    "departures": "46",
+    "hour": "14",
+    "hub": "Park Royal Mall",
+    "peak": "60.5"
+  },
+  {
+    "avg_pings": "2169.9",
+    "day_type": "Sat",
+    "departures": "46",
+    "hour": "15",
+    "hub": "Park Royal Mall",
+    "peak": "74.4"
+  },
+  {
+    "avg_pings": "2047.7",
+    "day_type": "Sat",
+    "departures": "48",
+    "hour": "16",
+    "hub": "Park Royal Mall",
+    "peak": "74.4"
+  },
+  {
+    "avg_pings": "1893.5",
+    "day_type": "Sat",
+    "departures": "48",
+    "hour": "17",
+    "hub": "Park Royal Mall",
+    "peak": "74.4"
+  },
+  {
+    "avg_pings": "1713.2",
+    "day_type": "Sat",
+    "departures": "42",
+    "hour": "18",
+    "hub": "Park Royal Mall",
+    "peak": "66.8"
+  },
+  {
+    "avg_pings": "1240.8",
+    "day_type": "Sat",
+    "departures": "40",
+    "hour": "19",
+    "hub": "Park Royal Mall",
+    "peak": "66.8"
+  },
+  {
+    "avg_pings": "823.3",
+    "day_type": "Sat",
+    "departures": "38",
+    "hour": "20",
+    "hub": "Park Royal Mall",
+    "peak": "66.8"
+  },
+  {
+    "avg_pings": "423.3",
+    "day_type": "Sat",
+    "departures": "33",
+    "hour": "21",
+    "hub": "Park Royal Mall",
+    "peak": "76.7"
+  },
+  {
+    "avg_pings": "312.2",
+    "day_type": "Sat",
+    "departures": "27",
+    "hour": "22",
+    "hub": "Park Royal Mall",
+    "peak": "76.7"
+  },
+  {
+    "avg_pings": "275.4",
+    "day_type": "Sat",
+    "departures": "20",
+    "hour": "23",
+    "hub": "Park Royal Mall",
+    "peak": "76.7"
+  },
+  {
+    "avg_pings": "213.5",
+    "day_type": "Sun/Hol",
+    "departures": "17",
+    "hour": "0",
+    "hub": "Park Royal Mall",
+    "peak": "7.9"
+  },
+  {
+    "avg_pings": "150.7",
+    "day_type": "Sun/Hol",
+    "departures": "11",
+    "hour": "1",
+    "hub": "Park Royal Mall",
+    "peak": "7.9"
+  },
+  {
+    "avg_pings": "115.3",
+    "day_type": "Sun/Hol",
+    "departures": "0",
+    "hour": "2",
+    "hub": "Park Royal Mall",
+    "peak": "7.9"
+  },
+  {
+    "avg_pings": "104.1",
+    "day_type": "Sun/Hol",
+    "departures": "0",
+    "hour": "3",
+    "hub": "Park Royal Mall",
+    "peak": "7.9"
+  },
+  {
+    "avg_pings": "99.3",
+    "day_type": "Sun/Hol",
+    "departures": "0",
+    "hour": "4",
+    "hub": "Park Royal Mall",
+    "peak": "25.6"
+  },
+  {
+    "avg_pings": "119.2",
+    "day_type": "Sun/Hol",
+    "departures": "4",
+    "hour": "5",
+    "hub": "Park Royal Mall",
+    "peak": "25.6"
+  },
+  {
+    "avg_pings": "179.7",
+    "day_type": "Sun/Hol",
+    "departures": "16",
+    "hour": "6",
+    "hub": "Park Royal Mall",
+    "peak": "58.5"
+  },
+  {
+    "avg_pings": "264.1",
+    "day_type": "Sun/Hol",
+    "departures": "21",
+    "hour": "7",
+    "hub": "Park Royal Mall",
+    "peak": "58.5"
+  },
+  {
+    "avg_pings": "405.8",
+    "day_type": "Sun/Hol",
+    "departures": "27",
+    "hour": "8",
+    "hub": "Park Royal Mall",
+    "peak": "58.5"
+  },
+  {
+    "avg_pings": "632.3",
+    "day_type": "Sun/Hol",
+    "departures": "35",
+    "hour": "9",
+    "hub": "Park Royal Mall",
+    "peak": "65.7"
+  },
+  {
+    "avg_pings": "980.1",
+    "day_type": "Sun/Hol",
+    "departures": "37",
+    "hour": "10",
+    "hub": "Park Royal Mall",
+    "peak": "65.7"
+  },
+  {
+    "avg_pings": "1263.7",
+    "day_type": "Sun/Hol",
+    "departures": "41",
+    "hour": "11",
+    "hub": "Park Royal Mall",
+    "peak": "65.7"
+  },
+  {
+    "avg_pings": "1609.2",
+    "day_type": "Sun/Hol",
+    "departures": "41",
+    "hour": "12",
+    "hub": "Park Royal Mall",
+    "peak": "65.7"
+  },
+  {
+    "avg_pings": "1749.5",
+    "day_type": "Sun/Hol",
+    "departures": "41",
+    "hour": "13",
+    "hub": "Park Royal Mall",
+    "peak": "65.7"
+  },
+  {
+    "avg_pings": "1739.6",
+    "day_type": "Sun/Hol",
+    "departures": "43",
+    "hour": "14",
+    "hub": "Park Royal Mall",
+    "peak": "65.7"
+  },
+  {
+    "avg_pings": "1877.5",
+    "day_type": "Sun/Hol",
+    "departures": "46",
+    "hour": "15",
+    "hub": "Park Royal Mall",
+    "peak": "74.0"
+  },
+  {
+    "avg_pings": "1815.1",
+    "day_type": "Sun/Hol",
+    "departures": "45",
+    "hour": "16",
+    "hub": "Park Royal Mall",
+    "peak": "74.0"
+  },
+  {
+    "avg_pings": "1597.3",
+    "day_type": "Sun/Hol",
+    "departures": "46",
+    "hour": "17",
+    "hub": "Park Royal Mall",
+    "peak": "74.0"
+  },
+  {
+    "avg_pings": "1244.6",
+    "day_type": "Sun/Hol",
+    "departures": "44",
+    "hour": "18",
+    "hub": "Park Royal Mall",
+    "peak": "71.1"
+  },
+  {
+    "avg_pings": "782.3",
+    "day_type": "Sun/Hol",
+    "departures": "39",
+    "hour": "19",
+    "hub": "Park Royal Mall",
+    "peak": "71.1"
+  },
+  {
+    "avg_pings": "583.6",
+    "day_type": "Sun/Hol",
+    "departures": "36",
+    "hour": "20",
+    "hub": "Park Royal Mall",
+    "peak": "71.1"
+  },
+  {
+    "avg_pings": "431.2",
+    "day_type": "Sun/Hol",
+    "departures": "29",
+    "hour": "21",
+    "hub": "Park Royal Mall",
+    "peak": "61.2"
+  },
+  {
+    "avg_pings": "300.2",
+    "day_type": "Sun/Hol",
+    "departures": "26",
+    "hour": "22",
+    "hub": "Park Royal Mall",
+    "peak": "61.2"
+  },
+  {
+    "avg_pings": "235.8",
+    "day_type": "Sun/Hol",
+    "departures": "21",
+    "hour": "23",
+    "hub": "Park Royal Mall",
+    "peak": "61.2"
+  },
+  {
+    "avg_pings": "543.3",
+    "day_type": "MF",
+    "departures": "33",
+    "hour": "0",
+    "hub": "UBC",
+    "peak": "35.4"
+  },
+  {
+    "avg_pings": "376.7",
+    "day_type": "MF",
+    "departures": "15",
+    "hour": "1",
+    "hub": "UBC",
+    "peak": "35.4"
+  },
+  {
+    "avg_pings": "305.0",
+    "day_type": "MF",
+    "departures": "11",
+    "hour": "2",
+    "hub": "UBC",
+    "peak": "35.4"
+  },
+  {
+    "avg_pings": "248.6",
+    "day_type": "MF",
+    "departures": "4",
+    "hour": "3",
+    "hub": "UBC",
+    "peak": "35.4"
+  },
+  {
+    "avg_pings": "224.7",
+    "day_type": "MF",
+    "departures": "3",
+    "hour": "4",
+    "hub": "UBC",
+    "peak": "86.2"
+  },
+  {
+    "avg_pings": "267.5",
+    "day_type": "MF",
+    "departures": "15",
+    "hour": "5",
+    "hub": "UBC",
+    "peak": "86.2"
+  },
+  {
+    "avg_pings": "491.7",
+    "day_type": "MF",
+    "departures": "68",
+    "hour": "6",
+    "hub": "UBC",
+    "peak": "104.2"
+  },
+  {
+    "avg_pings": "915.2",
+    "day_type": "MF",
+    "departures": "167",
+    "hour": "7",
+    "hub": "UBC",
+    "peak": "104.2"
+  },
+  {
+    "avg_pings": "1517.7",
+    "day_type": "MF",
+    "departures": "181",
+    "hour": "8",
+    "hub": "UBC",
+    "peak": "104.2"
+  },
+  {
+    "avg_pings": "2030.2",
+    "day_type": "MF",
+    "departures": "166",
+    "hour": "9",
+    "hub": "UBC",
+    "peak": "78.9"
+  },
+  {
+    "avg_pings": "2277.4",
+    "day_type": "MF",
+    "departures": "153",
+    "hour": "10",
+    "hub": "UBC",
+    "peak": "78.9"
+  },
+  {
+    "avg_pings": "2357.8",
+    "day_type": "MF",
+    "departures": "110",
+    "hour": "11",
+    "hub": "UBC",
+    "peak": "78.9"
+  },
+  {
+    "avg_pings": "2811.3",
+    "day_type": "MF",
+    "departures": "103",
+    "hour": "12",
+    "hub": "UBC",
+    "peak": "78.9"
+  },
+  {
+    "avg_pings": "2819.5",
+    "day_type": "MF",
+    "departures": "112",
+    "hour": "13",
+    "hub": "UBC",
+    "peak": "78.9"
+  },
+  {
+    "avg_pings": "2454.6",
+    "day_type": "MF",
+    "departures": "133",
+    "hour": "14",
+    "hub": "UBC",
+    "peak": "78.9"
+  },
+  {
+    "avg_pings": "2540.5",
+    "day_type": "MF",
+    "departures": "159",
+    "hour": "15",
+    "hub": "UBC",
+    "peak": "100.2"
+  },
+  {
+    "avg_pings": "2341.7",
+    "day_type": "MF",
+    "departures": "173",
+    "hour": "16",
+    "hub": "UBC",
+    "peak": "100.2"
+  },
+  {
+    "avg_pings": "2055.9",
+    "day_type": "MF",
+    "departures": "174",
+    "hour": "17",
+    "hub": "UBC",
+    "peak": "100.2"
+  },
+  {
+    "avg_pings": "1791.7",
+    "day_type": "MF",
+    "departures": "130",
+    "hour": "18",
+    "hub": "UBC",
+    "peak": "83.1"
+  },
+  {
+    "avg_pings": "1526.2",
+    "day_type": "MF",
+    "departures": "92",
+    "hour": "19",
+    "hub": "UBC",
+    "peak": "83.1"
+  },
+  {
+    "avg_pings": "1311.3",
+    "day_type": "MF",
+    "departures": "75",
+    "hour": "20",
+    "hub": "UBC",
+    "peak": "83.1"
+  },
+  {
+    "avg_pings": "1148.8",
+    "day_type": "MF",
+    "departures": "64",
+    "hour": "21",
+    "hub": "UBC",
+    "peak": "72.4"
+  },
+  {
+    "avg_pings": "896.8",
+    "day_type": "MF",
+    "departures": "52",
+    "hour": "22",
+    "hub": "UBC",
+    "peak": "72.4"
+  },
+  {
+    "avg_pings": "714.6",
+    "day_type": "MF",
+    "departures": "46",
+    "hour": "23",
+    "hub": "UBC",
+    "peak": "72.4"
+  },
+  {
+    "avg_pings": "590.8",
+    "day_type": "Sat",
+    "departures": "33",
+    "hour": "0",
+    "hub": "UBC",
+    "peak": "30.0"
+  },
+  {
+    "avg_pings": "440.1",
+    "day_type": "Sat",
+    "departures": "13",
+    "hour": "1",
+    "hub": "UBC",
+    "peak": "30.0"
+  },
+  {
+    "avg_pings": "380.6",
+    "day_type": "Sat",
+    "departures": "10",
+    "hour": "2",
+    "hub": "UBC",
+    "peak": "30.0"
+  },
+  {
+    "avg_pings": "275.7",
+    "day_type": "Sat",
+    "departures": "7",
+    "hour": "3",
+    "hub": "UBC",
+    "peak": "30.0"
+  },
+  {
+    "avg_pings": "222.5",
+    "day_type": "Sat",
+    "departures": "3",
+    "hour": "4",
+    "hub": "UBC",
+    "peak": "34.2"
+  },
+  {
+    "avg_pings": "218.7",
+    "day_type": "Sat",
+    "departures": "8",
+    "hour": "5",
+    "hub": "UBC",
+    "peak": "34.2"
+  },
+  {
+    "avg_pings": "312.7",
+    "day_type": "Sat",
+    "departures": "28",
+    "hour": "6",
+    "hub": "UBC",
+    "peak": "83.7"
+  },
+  {
+    "avg_pings": "398.7",
+    "day_type": "Sat",
+    "departures": "55",
+    "hour": "7",
+    "hub": "UBC",
+    "peak": "83.7"
+  },
+  {
+    "avg_pings": "706.2",
+    "day_type": "Sat",
+    "departures": "63",
+    "hour": "8",
+    "hub": "UBC",
+    "peak": "83.7"
+  },
+  {
+    "avg_pings": "823.7",
+    "day_type": "Sat",
+    "departures": "80",
+    "hour": "9",
+    "hub": "UBC",
+    "peak": "78.8"
+  },
+  {
+    "avg_pings": "1003.9",
+    "day_type": "Sat",
+    "departures": "85",
+    "hour": "10",
+    "hub": "UBC",
+    "peak": "78.8"
+  },
+  {
+    "avg_pings": "1243.2",
+    "day_type": "Sat",
+    "departures": "86",
+    "hour": "11",
+    "hub": "UBC",
+    "peak": "78.8"
+  },
+  {
+    "avg_pings": "1343.3",
+    "day_type": "Sat",
+    "departures": "92",
+    "hour": "12",
+    "hub": "UBC",
+    "peak": "78.8"
+  },
+  {
+    "avg_pings": "1476.1",
+    "day_type": "Sat",
+    "departures": "99",
+    "hour": "13",
+    "hub": "UBC",
+    "peak": "78.8"
+  },
+  {
+    "avg_pings": "1504.5",
+    "day_type": "Sat",
+    "departures": "102",
+    "hour": "14",
+    "hub": "UBC",
+    "peak": "78.8"
+  },
+  {
+    "avg_pings": "1457.2",
+    "day_type": "Sat",
+    "departures": "103",
+    "hour": "15",
+    "hub": "UBC",
+    "peak": "98.0"
+  },
+  {
+    "avg_pings": "1428.5",
+    "day_type": "Sat",
+    "departures": "98",
+    "hour": "16",
+    "hub": "UBC",
+    "peak": "98.0"
+  },
+  {
+    "avg_pings": "1288.2",
+    "day_type": "Sat",
+    "departures": "100",
+    "hour": "17",
+    "hub": "UBC",
+    "peak": "98.0"
+  },
+  {
+    "avg_pings": "1323.0",
+    "day_type": "Sat",
+    "departures": "87",
+    "hour": "18",
+    "hub": "UBC",
+    "peak": "74.5"
+  },
+  {
+    "avg_pings": "1164.0",
+    "day_type": "Sat",
+    "departures": "75",
+    "hour": "19",
+    "hub": "UBC",
+    "peak": "74.5"
+  },
+  {
+    "avg_pings": "1070.7",
+    "day_type": "Sat",
+    "departures": "69",
+    "hour": "20",
+    "hub": "UBC",
+    "peak": "74.5"
+  },
+  {
+    "avg_pings": "982.9",
+    "day_type": "Sat",
+    "departures": "63",
+    "hour": "21",
+    "hub": "UBC",
+    "peak": "64.1"
+  },
+  {
+    "avg_pings": "770.5",
+    "day_type": "Sat",
+    "departures": "53",
+    "hour": "22",
+    "hub": "UBC",
+    "peak": "64.1"
+  },
+  {
+    "avg_pings": "693.8",
+    "day_type": "Sat",
+    "departures": "47",
+    "hour": "23",
+    "hub": "UBC",
+    "peak": "64.1"
+  },
+  {
+    "avg_pings": "521.8",
+    "day_type": "Sun/Hol",
+    "departures": "29",
+    "hour": "0",
+    "hub": "UBC",
+    "peak": "31.0"
+  },
+  {
+    "avg_pings": "378.5",
+    "day_type": "Sun/Hol",
+    "departures": "11",
+    "hour": "1",
+    "hub": "UBC",
+    "peak": "31.0"
+  },
+  {
+    "avg_pings": "306.0",
+    "day_type": "Sun/Hol",
+    "departures": "8",
+    "hour": "2",
+    "hub": "UBC",
+    "peak": "31.0"
+  },
+  {
+    "avg_pings": "248.1",
+    "day_type": "Sun/Hol",
+    "departures": "5",
+    "hour": "3",
+    "hub": "UBC",
+    "peak": "31.0"
+  },
+  {
+    "avg_pings": "209.2",
+    "day_type": "Sun/Hol",
+    "departures": "3",
+    "hour": "4",
+    "hub": "UBC",
+    "peak": "53.3"
+  },
+  {
+    "avg_pings": "211.3",
+    "day_type": "Sun/Hol",
+    "departures": "8",
+    "hour": "5",
+    "hub": "UBC",
+    "peak": "53.3"
+  },
+  {
+    "avg_pings": "279.6",
+    "day_type": "Sun/Hol",
+    "departures": "17",
+    "hour": "6",
+    "hub": "UBC",
+    "peak": "68.0"
+  },
+  {
+    "avg_pings": "383.7",
+    "day_type": "Sun/Hol",
+    "departures": "33",
+    "hour": "7",
+    "hub": "UBC",
+    "peak": "68.0"
+  },
+  {
+    "avg_pings": "596.3",
+    "day_type": "Sun/Hol",
+    "departures": "55",
+    "hour": "8",
+    "hub": "UBC",
+    "peak": "68.0"
+  },
+  {
+    "avg_pings": "804.8",
+    "day_type": "Sun/Hol",
+    "departures": "57",
+    "hour": "9",
+    "hub": "UBC",
+    "peak": "81.4"
+  },
+  {
+    "avg_pings": "982.8",
+    "day_type": "Sun/Hol",
+    "departures": "72",
+    "hour": "10",
+    "hub": "UBC",
+    "peak": "81.4"
+  },
+  {
+    "avg_pings": "1183.6",
+    "day_type": "Sun/Hol",
+    "departures": "72",
+    "hour": "11",
+    "hub": "UBC",
+    "peak": "81.4"
+  },
+  {
+    "avg_pings": "1313.4",
+    "day_type": "Sun/Hol",
+    "departures": "74",
+    "hour": "12",
+    "hub": "UBC",
+    "peak": "81.4"
+  },
+  {
+    "avg_pings": "1444.3",
+    "day_type": "Sun/Hol",
+    "departures": "81",
+    "hour": "13",
+    "hub": "UBC",
+    "peak": "81.4"
+  },
+  {
+    "avg_pings": "1427.7",
+    "day_type": "Sun/Hol",
+    "departures": "83",
+    "hour": "14",
+    "hub": "UBC",
+    "peak": "81.4"
+  },
+  {
+    "avg_pings": "1447.3",
+    "day_type": "Sun/Hol",
+    "departures": "83",
+    "hour": "15",
+    "hub": "UBC",
+    "peak": "90.9"
+  },
+  {
+    "avg_pings": "1456.7",
+    "day_type": "Sun/Hol",
+    "departures": "82",
+    "hour": "16",
+    "hub": "UBC",
+    "peak": "90.9"
+  },
+  {
+    "avg_pings": "1288.0",
+    "day_type": "Sun/Hol",
+    "departures": "79",
+    "hour": "17",
+    "hub": "UBC",
+    "peak": "90.9"
+  },
+  {
+    "avg_pings": "1267.1",
+    "day_type": "Sun/Hol",
+    "departures": "75",
+    "hour": "18",
+    "hub": "UBC",
+    "peak": "74.0"
+  },
+  {
+    "avg_pings": "1118.4",
+    "day_type": "Sun/Hol",
+    "departures": "67",
+    "hour": "19",
+    "hub": "UBC",
+    "peak": "74.0"
+  },
+  {
+    "avg_pings": "1041.9",
+    "day_type": "Sun/Hol",
+    "departures": "64",
+    "hour": "20",
+    "hub": "UBC",
+    "peak": "74.0"
+  },
+  {
+    "avg_pings": "1008.5",
+    "day_type": "Sun/Hol",
+    "departures": "51",
+    "hour": "21",
+    "hub": "UBC",
+    "peak": "65.2"
+  },
+  {
+    "avg_pings": "803.6",
+    "day_type": "Sun/Hol",
+    "departures": "46",
+    "hour": "22",
+    "hub": "UBC",
+    "peak": "65.2"
+  },
+  {
+    "avg_pings": "622.3",
+    "day_type": "Sun/Hol",
+    "departures": "44",
+    "hour": "23",
+    "hub": "UBC",
+    "peak": "65.2"
+  },
+  {
+    "avg_pings": "283.8",
+    "day_type": "MF",
+    "departures": "111",
+    "hour": "0",
+    "hub": "Waterfront Station",
+    "peak": "43.6"
+  },
+  {
+    "avg_pings": "164.3",
+    "day_type": "MF",
+    "departures": "73",
+    "hour": "1",
+    "hub": "Waterfront Station",
+    "peak": "43.6"
+  },
+  {
+    "avg_pings": "116.3",
+    "day_type": "MF",
+    "departures": "33",
+    "hour": "2",
+    "hub": "Waterfront Station",
+    "peak": "43.6"
+  },
+  {
+    "avg_pings": "104.1",
+    "day_type": "MF",
+    "departures": "21",
+    "hour": "3",
+    "hub": "Waterfront Station",
+    "peak": "43.6"
+  },
+  {
+    "avg_pings": "111.3",
+    "day_type": "MF",
+    "departures": "24",
+    "hour": "4",
+    "hub": "Waterfront Station",
+    "peak": "65.4"
+  },
+  {
+    "avg_pings": "210.2",
+    "day_type": "MF",
+    "departures": "104",
+    "hour": "5",
+    "hub": "Waterfront Station",
+    "peak": "65.4"
+  },
+  {
+    "avg_pings": "575.7",
+    "day_type": "MF",
+    "departures": "215",
+    "hour": "6",
+    "hub": "Waterfront Station",
+    "peak": "76.3"
+  },
+  {
+    "avg_pings": "1191.1",
+    "day_type": "MF",
+    "departures": "278",
+    "hour": "7",
+    "hub": "Waterfront Station",
+    "peak": "76.3"
+  },
+  {
+    "avg_pings": "1973.8",
+    "day_type": "MF",
+    "departures": "292",
+    "hour": "8",
+    "hub": "Waterfront Station",
+    "peak": "76.3"
+  },
+  {
+    "avg_pings": "1651.3",
+    "day_type": "MF",
+    "departures": "257",
+    "hour": "9",
+    "hub": "Waterfront Station",
+    "peak": "71.7"
+  },
+  {
+    "avg_pings": "1580.3",
+    "day_type": "MF",
+    "departures": "223",
+    "hour": "10",
+    "hub": "Waterfront Station",
+    "peak": "71.7"
+  },
+  {
+    "avg_pings": "1790.6",
+    "day_type": "MF",
+    "departures": "209",
+    "hour": "11",
+    "hub": "Waterfront Station",
+    "peak": "71.7"
+  },
+  {
+    "avg_pings": "2097.2",
+    "day_type": "MF",
+    "departures": "203",
+    "hour": "12",
+    "hub": "Waterfront Station",
+    "peak": "71.7"
+  },
+  {
+    "avg_pings": "2055.0",
+    "day_type": "MF",
+    "departures": "210",
+    "hour": "13",
+    "hub": "Waterfront Station",
+    "peak": "71.7"
+  },
+  {
+    "avg_pings": "1992.8",
+    "day_type": "MF",
+    "departures": "227",
+    "hour": "14",
+    "hub": "Waterfront Station",
+    "peak": "71.7"
+  },
+  {
+    "avg_pings": "2343.5",
+    "day_type": "MF",
+    "departures": "275",
+    "hour": "15",
+    "hub": "Waterfront Station",
+    "peak": "89.0"
+  },
+  {
+    "avg_pings": "2758.9",
+    "day_type": "MF",
+    "departures": "294",
+    "hour": "16",
+    "hub": "Waterfront Station",
+    "peak": "89.0"
+  },
+  {
+    "avg_pings": "2523.3",
+    "day_type": "MF",
+    "departures": "292",
+    "hour": "17",
+    "hub": "Waterfront Station",
+    "peak": "89.0"
+  },
+  {
+    "avg_pings": "1598.9",
+    "day_type": "MF",
+    "departures": "281",
+    "hour": "18",
+    "hub": "Waterfront Station",
+    "peak": "74.7"
+  },
+  {
+    "avg_pings": "1131.4",
+    "day_type": "MF",
+    "departures": "209",
+    "hour": "19",
+    "hub": "Waterfront Station",
+    "peak": "74.7"
+  },
+  {
+    "avg_pings": "938.2",
+    "day_type": "MF",
+    "departures": "180",
+    "hour": "20",
+    "hub": "Waterfront Station",
+    "peak": "74.7"
+  },
+  {
+    "avg_pings": "907.9",
+    "day_type": "MF",
+    "departures": "160",
+    "hour": "21",
+    "hub": "Waterfront Station",
+    "peak": "57.0"
+  },
+  {
+    "avg_pings": "781.5",
+    "day_type": "MF",
+    "departures": "142",
+    "hour": "22",
+    "hub": "Waterfront Station",
+    "peak": "57.0"
+  },
+  {
+    "avg_pings": "547.7",
+    "day_type": "MF",
+    "departures": "134",
+    "hour": "23",
+    "hub": "Waterfront Station",
+    "peak": "57.0"
+  },
+  {
+    "avg_pings": "649.3",
+    "day_type": "Sat",
+    "departures": "112",
+    "hour": "0",
+    "hub": "Waterfront Station",
+    "peak": "43.5"
+  },
+  {
+    "avg_pings": "415.6",
+    "day_type": "Sat",
+    "departures": "77",
+    "hour": "1",
+    "hub": "Waterfront Station",
+    "peak": "43.5"
+  },
+  {
+    "avg_pings": "270.1",
+    "day_type": "Sat",
+    "departures": "32",
+    "hour": "2",
+    "hub": "Waterfront Station",
+    "peak": "43.5"
+  },
+  {
+    "avg_pings": "163.7",
+    "day_type": "Sat",
+    "departures": "24",
+    "hour": "3",
+    "hub": "Waterfront Station",
+    "peak": "43.5"
+  },
+  {
+    "avg_pings": "126.5",
+    "day_type": "Sat",
+    "departures": "21",
+    "hour": "4",
+    "hub": "Waterfront Station",
+    "peak": "53.6"
+  },
+  {
+    "avg_pings": "140.4",
+    "day_type": "Sat",
+    "departures": "66",
+    "hour": "5",
+    "hub": "Waterfront Station",
+    "peak": "53.6"
+  },
+  {
+    "avg_pings": "237.3",
+    "day_type": "Sat",
+    "departures": "123",
+    "hour": "6",
+    "hub": "Waterfront Station",
+    "peak": "59.5"
+  },
+  {
+    "avg_pings": "402.3",
+    "day_type": "Sat",
+    "departures": "169",
+    "hour": "7",
+    "hub": "Waterfront Station",
+    "peak": "59.5"
+  },
+  {
+    "avg_pings": "568.2",
+    "day_type": "Sat",
+    "departures": "188",
+    "hour": "8",
+    "hub": "Waterfront Station",
+    "peak": "59.5"
+  },
+  {
+    "avg_pings": "738.4",
+    "day_type": "Sat",
+    "departures": "188",
+    "hour": "9",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "930.3",
+    "day_type": "Sat",
+    "departures": "203",
+    "hour": "10",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1155.5",
+    "day_type": "Sat",
+    "departures": "210",
+    "hour": "11",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1357.3",
+    "day_type": "Sat",
+    "departures": "208",
+    "hour": "12",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1521.8",
+    "day_type": "Sat",
+    "departures": "214",
+    "hour": "13",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1692.6",
+    "day_type": "Sat",
+    "departures": "218",
+    "hour": "14",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1864.2",
+    "day_type": "Sat",
+    "departures": "221",
+    "hour": "15",
+    "hub": "Waterfront Station",
+    "peak": "98.0"
+  },
+  {
+    "avg_pings": "1891.1",
+    "day_type": "Sat",
+    "departures": "227",
+    "hour": "16",
+    "hub": "Waterfront Station",
+    "peak": "98.0"
+  },
+  {
+    "avg_pings": "1866.6",
+    "day_type": "Sat",
+    "departures": "229",
+    "hour": "17",
+    "hub": "Waterfront Station",
+    "peak": "98.0"
+  },
+  {
+    "avg_pings": "1741.8",
+    "day_type": "Sat",
+    "departures": "214",
+    "hour": "18",
+    "hub": "Waterfront Station",
+    "peak": "74.5"
+  },
+  {
+    "avg_pings": "1485.5",
+    "day_type": "Sat",
+    "departures": "197",
+    "hour": "19",
+    "hub": "Waterfront Station",
+    "peak": "74.5"
+  },
+  {
+    "avg_pings": "1292.0",
+    "day_type": "Sat",
+    "departures": "183",
+    "hour": "20",
+    "hub": "Waterfront Station",
+    "peak": "74.5"
+  },
+  {
+    "avg_pings": "663.0",
+    "day_type": "Sat",
+    "departures": "176",
+    "hour": "21",
+    "hub": "Waterfront Station",
+    "peak": "67.9"
+  },
+  {
+    "avg_pings": "540.5",
+    "day_type": "Sat",
+    "departures": "157",
+    "hour": "22",
+    "hub": "Waterfront Station",
+    "peak": "67.9"
+  },
+  {
+    "avg_pings": "693.8",
+    "day_type": "Sat",
+    "departures": "140",
+    "hour": "23",
+    "hub": "Waterfront Station",
+    "peak": "67.9"
+  },
+  {
+    "avg_pings": "644.5",
+    "day_type": "Sun/Hol",
+    "departures": "92",
+    "hour": "0",
+    "hub": "Waterfront Station",
+    "peak": "22.9"
+  },
+  {
+    "avg_pings": "409.2",
+    "day_type": "Sun/Hol",
+    "departures": "63",
+    "hour": "1",
+    "hub": "Waterfront Station",
+    "peak": "22.9"
+  },
+  {
+    "avg_pings": "280.8",
+    "day_type": "Sun/Hol",
+    "departures": "25",
+    "hour": "2",
+    "hub": "Waterfront Station",
+    "peak": "22.9"
+  },
+  {
+    "avg_pings": "198.3",
+    "day_type": "Sun/Hol",
+    "departures": "20",
+    "hour": "3",
+    "hub": "Waterfront Station",
+    "peak": "22.9"
+  },
+  {
+    "avg_pings": "127.8",
+    "day_type": "Sun/Hol",
+    "departures": "10",
+    "hour": "4",
+    "hub": "Waterfront Station",
+    "peak": "53.8"
+  },
+  {
+    "avg_pings": "139.9",
+    "day_type": "Sun/Hol",
+    "departures": "51",
+    "hour": "5",
+    "hub": "Waterfront Station",
+    "peak": "53.8"
+  },
+  {
+    "avg_pings": "249.9",
+    "day_type": "Sun/Hol",
+    "departures": "89",
+    "hour": "6",
+    "hub": "Waterfront Station",
+    "peak": "57.1"
+  },
+  {
+    "avg_pings": "447.6",
+    "day_type": "Sun/Hol",
+    "departures": "121",
+    "hour": "7",
+    "hub": "Waterfront Station",
+    "peak": "57.1"
+  },
+  {
+    "avg_pings": "738.8",
+    "day_type": "Sun/Hol",
+    "departures": "159",
+    "hour": "8",
+    "hub": "Waterfront Station",
+    "peak": "57.1"
+  },
+  {
+    "avg_pings": "756.5",
+    "day_type": "Sun/Hol",
+    "departures": "178",
+    "hour": "9",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "881.2",
+    "day_type": "Sun/Hol",
+    "departures": "191",
+    "hour": "10",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1075.1",
+    "day_type": "Sun/Hol",
+    "departures": "203",
+    "hour": "11",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1295.9",
+    "day_type": "Sun/Hol",
+    "departures": "206",
+    "hour": "12",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1400.5",
+    "day_type": "Sun/Hol",
+    "departures": "213",
+    "hour": "13",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1467.6",
+    "day_type": "Sun/Hol",
+    "departures": "219",
+    "hour": "14",
+    "hub": "Waterfront Station",
+    "peak": "74.9"
+  },
+  {
+    "avg_pings": "1543.6",
+    "day_type": "Sun/Hol",
+    "departures": "213",
+    "hour": "15",
+    "hub": "Waterfront Station",
+    "peak": "90.9"
+  },
+  {
+    "avg_pings": "1636.2",
+    "day_type": "Sun/Hol",
+    "departures": "215",
+    "hour": "16",
+    "hub": "Waterfront Station",
+    "peak": "90.9"
+  },
+  {
+    "avg_pings": "1503.3",
+    "day_type": "Sun/Hol",
+    "departures": "214",
+    "hour": "17",
+    "hub": "Waterfront Station",
+    "peak": "90.9"
+  },
+  {
+    "avg_pings": "1191.4",
+    "day_type": "Sun/Hol",
+    "departures": "207",
+    "hour": "18",
+    "hub": "Waterfront Station",
+    "peak": "60.8"
+  },
+  {
+    "avg_pings": "955.7",
+    "day_type": "Sun/Hol",
+    "departures": "187",
+    "hour": "19",
+    "hub": "Waterfront Station",
+    "peak": "60.8"
+  },
+  {
+    "avg_pings": "770.1",
+    "day_type": "Sun/Hol",
+    "departures": "176",
+    "hour": "20",
+    "hub": "Waterfront Station",
+    "peak": "60.8"
+  },
+  {
+    "avg_pings": "671.1",
+    "day_type": "Sun/Hol",
+    "departures": "158",
+    "hour": "21",
+    "hub": "Waterfront Station",
+    "peak": "51.0"
+  },
+  {
+    "avg_pings": "545.0",
+    "day_type": "Sun/Hol",
+    "departures": "141",
+    "hour": "22",
+    "hub": "Waterfront Station",
+    "peak": "51.0"
+  },
+  {
+    "avg_pings": "413.4",
+    "day_type": "Sun/Hol",
+    "departures": "129",
+    "hour": "23",
+    "hub": "Waterfront Station",
+    "peak": "51.0"
+  }
+]

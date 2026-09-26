@@ -1,0 +1,50 @@
+{
+ "v": 4,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-26T15:29:59Z"
+ },
+ "title": "Hub Pulse \u2014 Hackathon Pitch",
+ "order": [
+  "cover",
+  "problem",
+  "data",
+  "validation",
+  "gap",
+  "crowding",
+  "access",
+  "solution",
+  "results",
+  "actions",
+  "demo"
+ ],
+ "sections": {
+  "problem": {
+   "description": "The schedule and the hubs are out of step",
+   "start": "cover"
+  },
+  "evidence": {
+   "description": "Three sources, validated, and what they show",
+   "start": "data"
+  },
+  "solution": {
+   "description": "What we built on Databricks and what it finds",
+   "start": "solution"
+  },
+  "next": {
+   "description": "Recommendations and live demo",
+   "start": "actions"
+  }
+ },
+ "faces": {
+  "oswald": {
+   "family": "Oswald",
+   "href": "https://fonts.googleapis.com/css2?family=Oswald:wght@400..700&display=swap"
+  },
+  "public-sans": {
+   "family": "Public Sans",
+   "href": "https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap"
+  }
+ },
+ "designSystems": []
+}

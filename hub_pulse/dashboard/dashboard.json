@@ -1,0 +1,1694 @@
+{
+ "datasets": [
+  {
+   "name": "ds_daily",
+   "displayName": "Daily visits",
+   "queryLines": [
+    "SELECT hub, visit_date, weekday, day_type, pings, surge_index, is_surge, visitor_share,\n",
+    "  CASE WHEN is_surge THEN 1 ELSE 0 END AS surge_flag\n",
+    "FROM gold_hub_daily\n",
+    "ORDER BY visit_date\n"
+   ]
+  },
+  {
+   "name": "ds_gap",
+   "displayName": "Hourly demand vs service",
+   "queryLines": [
+    "SELECT hub, day_type,\n",
+    "  CASE day_type WHEN 'MF' THEN 'Weekday' WHEN 'Sat' THEN 'Saturday' ELSE 'Sunday/holiday' END AS day_label,\n",
+    "  hour, lpad(CAST(hour AS STRING), 2, '0') || ':00' AS hour_label,\n",
+    "  avg_pings, departures, demand_pct / 100 AS demand_share, supply_pct / 100 AS supply_share,\n",
+    "  gap_index, status, departures_short,\n",
+    "  CASE WHEN status IN ('Underserved', 'No service') THEN 1 ELSE 0 END AS underserved_flag\n",
+    "FROM gold_hub_gap_hourly\n",
+    "ORDER BY hub, day_type, hour\n"
+   ]
+  },
+  {
+   "name": "ds_route",
+   "displayName": "Route crowding (TSPR 2025)",
+   "queryLines": [
+    "SELECT hub, line || ' ' || route_name AS line_label, line, route_name, weekly_trips_at_hub,\n",
+    "  avg_weekday_boardings, pct_trips_overcrowded / 100 AS overcrowded_share,\n",
+    "  avg_peak_load_factor / 100 AS peak_load, pct_bunching / 100 AS bunching_share, pct_on_time / 100 AS on_time_share\n",
+    "FROM gold_route_stress\n",
+    "ORDER BY pct_trips_overcrowded DESC\n"
+   ]
+  },
+  {
+   "name": "ds_period",
+   "displayName": "Crowding by time period",
+   "queryLines": [
+    "SELECT hub, season, time_period, tspr_hour_range, demand_pct / 100 AS demand_share,\n",
+    "  max_peak_load_factor / 100 AS max_peak_load, avg_peak_load_factor / 100 AS avg_peak_load, most_crowded_line\n",
+    "FROM gold_hub_timerange_stress\n",
+    "WHERE day_type = 'MF' AND max_peak_load_factor IS NOT NULL\n",
+    "ORDER BY tspr_hour_range\n"
+   ]
+  },
+  {
+   "name": "ds_forecast",
+   "displayName": "Visits forecast",
+   "queryLines": [
+    "WITH actuals AS (\n",
+    "  SELECT hub, visit_date AS ds, CAST(pings AS DOUBLE) AS visits FROM gold_hub_daily\n",
+    "),\n",
+    "last AS (SELECT hub, max(ds) AS max_d FROM actuals GROUP BY hub),\n",
+    "fc AS (\n",
+    "  SELECT hub, forecast_date AS ds, CAST(greatest(forecast_pings, 0) AS DOUBLE) AS visits_forecast,\n",
+    "    CAST(upper_80 AS DOUBLE) AS visits_upper, CAST(greatest(lower_80, 0) AS DOUBLE) AS visits_lower\n",
+    "  FROM gold_hub_forecast\n",
+    ")\n",
+    "SELECT a.hub, a.ds, a.visits, CAST(NULL AS DOUBLE) AS visits_forecast, CAST(NULL AS DOUBLE) AS visits_upper, CAST(NULL AS DOUBLE) AS visits_lower\n",
+    "FROM actuals a\n",
+    "UNION ALL\n",
+    "SELECT a.hub, a.ds, a.visits, a.visits, a.visits, a.visits FROM actuals a JOIN last l ON a.hub = l.hub AND a.ds = l.max_d\n",
+    "UNION ALL\n",
+    "SELECT hub, ds, CAST(NULL AS DOUBLE), visits_forecast, visits_upper, visits_lower FROM fc\n",
+    "ORDER BY ds\n"
+   ]
+  },
+  {
+   "name": "ds_origin",
+   "displayName": "Visitor origins & access",
+   "queryLines": [
+    "SELECT hub, origin, region, lat, lon, pings, share_pct / 100 AS share, access_type, n_direct_lines,\n",
+    "  coalesce(direct_lines, '\u2014') AS direct_lines, avg_dwell_min,\n",
+    "  CASE WHEN share_of_local_pct IS NOT NULL THEN pings ELSE 0 END AS regional_pings,\n",
+    "  CASE WHEN access_type = 'Transfer required' THEN pings ELSE 0 END AS transfer_pings\n",
+    "FROM gold_origin_access\n",
+    "ORDER BY pings DESC\n"
+   ],
+   "columns": [
+    {
+     "displayName": "Transfer share",
+     "description": "Share of regional visits (excl. same-area and out-of-region) with no one-seat transit ride",
+     "expression": "SUM(`transfer_pings`) * 1.0 / SUM(`regional_pings`)"
+    }
+   ]
+  },
+  {
+   "name": "ds_recs",
+   "displayName": "Recommendations",
+   "queryLines": [
+    "SELECT hub, priority,\n",
+    "  CASE priority WHEN 1 THEN 'P1 \u2014 act now' WHEN 2 THEN 'P2 \u2014 plan' ELSE 'P3 \u2014 prepare' END AS priority_label,\n",
+    "  category, recommendation, evidence\n",
+    "FROM gold_recommendations\n",
+    "ORDER BY priority, hub, category\n"
+   ]
+  },
+  {
+   "name": "ds_validation",
+   "displayName": "Waterfront validation",
+   "queryLines": [
+    "SELECT hour, lpad(CAST(hour AS STRING), 2, '0') || ':00' AS hour_label,\n",
+    "  pings_pct / 100 AS pings_share, skytrain_pct / 100 AS skytrain_share\n",
+    "FROM gold_waterfront_validation\n",
+    "ORDER BY hour\n"
+   ]
+  },
+  {
+   "name": "ds_seabus",
+   "displayName": "SeaBus hourly load (TSPR 2025)",
+   "queryLines": [
+    "SELECT day_type, season, direction, hour, capacity, volume, utilization_pct / 100 AS utilization, peak_load_pct / 100 AS peak_load\n",
+    "FROM gold_seabus_hourly\n",
+    "ORDER BY hour\n"
+   ]
+  },
+  {
+   "name": "ds_heat",
+   "displayName": "Gap heatmap",
+   "queryLines": [
+    "SELECT hub, CASE day_type WHEN 'MF' THEN 'Weekday' WHEN 'Sat' THEN 'Saturday' ELSE 'Sunday/holiday' END AS day_label,\n",
+    "  lpad(CAST(hour AS STRING), 2, '0') AS hour_label, gap_index\n",
+    "FROM gold_hub_gap_hourly\n",
+    "ORDER BY hub, day_type, hour\n"
+   ]
+  },
+  {
+   "name": "ds_surge",
+   "displayName": "Surge days",
+   "queryLines": [
+    "SELECT hub, visit_date, weekday, pings, surge_index\n",
+    "FROM gold_hub_daily WHERE is_surge\n",
+    "ORDER BY surge_index DESC\n"
+   ]
+  }
+ ],
+ "pages": [
+  {
+   "name": "overview",
+   "displayName": "Hub overview",
+   "pageType": "PAGE_TYPE_CANVAS",
+   "layoutVersion": "GRID_V1",
+   "layout": [
+    {
+     "widget": {
+      "name": "header",
+      "multilineTextboxSpec": {
+       "lines": [
+        "# Hub Pulse \u2014 is Vancouver's transit schedule in step with its hubs?\n",
+        "\n",
+        "21.5M visit pings at **UBC**, **Waterfront Station** and **Park Royal Mall**, matched against TransLink's fall 2026 schedule (GTFS) and 2025 performance review (TSPR). The schedule is built around commute peaks, but visits peak **midday** and, at UBC, **overnight** \u2014 while the lines feeding these hubs are already overcrowded. Pick a hub on the right; recommendations are at the bottom."
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 4
+     }
+    },
+    {
+     "widget": {
+      "name": "filter-hub",
+      "queries": [
+       {
+        "name": "f_ds_daily",
+        "query": {
+         "datasetName": "ds_daily",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_gap",
+        "query": {
+         "datasetName": "ds_gap",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_heat",
+        "query": {
+         "datasetName": "ds_heat",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_route",
+        "query": {
+         "datasetName": "ds_route",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_period",
+        "query": {
+         "datasetName": "ds_period",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_forecast",
+        "query": {
+         "datasetName": "ds_forecast",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_surge",
+        "query": {
+         "datasetName": "ds_surge",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_origin",
+        "query": {
+         "datasetName": "ds_origin",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       },
+       {
+        "name": "f_ds_recs",
+        "query": {
+         "datasetName": "ds_recs",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "filter-single-select",
+       "encodings": {
+        "fields": [
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_daily"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_gap"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_heat"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_route"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_period"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_forecast"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_surge"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_origin"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub",
+          "queryName": "f_ds_recs"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Hub"
+       },
+       "selection": {
+        "defaultSelection": {
+         "values": {
+          "dataType": "STRING",
+          "values": [
+           {
+            "value": "UBC"
+           }
+          ]
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 8,
+      "y": 0,
+      "width": 4,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "filter-daytype",
+      "queries": [
+       {
+        "name": "f_ds_gap",
+        "query": {
+         "datasetName": "ds_gap",
+         "fields": [
+          {
+           "name": "day_label",
+           "expression": "`day_label`"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "filter-single-select",
+       "encodings": {
+        "fields": [
+         {
+          "fieldName": "day_label",
+          "displayName": "Day type (hourly chart)",
+          "queryName": "f_ds_gap"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Day type (hourly chart)"
+       },
+       "selection": {
+        "defaultSelection": {
+         "values": {
+          "dataType": "STRING",
+          "values": [
+           {
+            "value": "Weekday"
+           }
+          ]
+         }
+        }
+       }
+      }
+     },
+     "position": {
+      "x": 8,
+      "y": 2,
+      "width": 4,
+      "height": 2
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi-visits",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_daily",
+         "fields": [
+          {
+           "name": "sum(pings)",
+           "expression": "SUM(`pings`)"
+          },
+          {
+           "name": "weekly(visit_date)",
+           "expression": "DATE_TRUNC(\"WEEK\", `visit_date`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(pings)",
+         "displayName": "Visits",
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        },
+        "period": {
+         "fieldName": "weekly(visit_date)"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Visits analysed",
+        "showDescription": true,
+        "description": "Nov 2025 \u2013 Aug 2026, weekly trend"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi-underserved",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_gap",
+         "fields": [
+          {
+           "name": "sum(underserved_flag)",
+           "expression": "SUM(`underserved_flag`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "sum(underserved_flag)",
+         "displayName": "Hours"
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Underserved hours",
+        "showDescription": true,
+        "description": "Hours where visit share > 1.5\u00d7 departure share (selected day type)"
+       }
+      }
+     },
+     "position": {
+      "x": 3,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi-peakload",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_period",
+         "fields": [
+          {
+           "name": "max(max_peak_load)",
+           "expression": "MAX(`max_peak_load`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "max(max_peak_load)",
+         "displayName": "Peak load",
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Worst bus peak load",
+        "showDescription": true,
+        "description": "Busiest line at this hub, weekdays (TSPR 2025). 100% = full"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "kpi-transfer",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_origin",
+         "fields": [
+          {
+           "name": "measure(Transfer share)",
+           "expression": "MEASURE(`Transfer share`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "counter",
+       "encodings": {
+        "value": {
+         "fieldName": "measure(Transfer share)",
+         "displayName": "Must transfer",
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Regional visitors with no direct ride",
+        "showDescription": true,
+        "description": "Share of Metro Vancouver visitors who need a transfer"
+       }
+      }
+     },
+     "position": {
+      "x": 9,
+      "y": 4,
+      "width": 3,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "gap-line",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_gap",
+         "fields": [
+          {
+           "name": "hour_label",
+           "expression": "`hour_label`"
+          },
+          {
+           "name": "sum(demand_share)",
+           "expression": "SUM(`demand_share`)"
+          },
+          {
+           "name": "sum(supply_share)",
+           "expression": "SUM(`supply_share`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "line",
+       "encodings": {
+        "x": {
+         "fieldName": "hour_label",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        },
+        "y": {
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         },
+         "fields": [
+          {
+           "fieldName": "sum(demand_share)",
+           "displayName": "Share of daily visits"
+          },
+          {
+           "fieldName": "sum(supply_share)",
+           "displayName": "Share of daily departures"
+          }
+         ]
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Visits vs. scheduled departures by hour",
+        "showDescription": true,
+        "description": "Where the orange line is above the blue one, demand outruns service"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 7,
+      "width": 7,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "gap-heatmap",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_heat",
+         "fields": [
+          {
+           "name": "hour_label",
+           "expression": "`hour_label`"
+          },
+          {
+           "name": "day_label",
+           "expression": "`day_label`"
+          },
+          {
+           "name": "avg(gap_index)",
+           "expression": "AVG(`gap_index`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "heatmap",
+       "encodings": {
+        "x": {
+         "fieldName": "hour_label",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        },
+        "y": {
+         "fieldName": "day_label",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        },
+        "color": {
+         "fieldName": "avg(gap_index)",
+         "displayName": "Gap index",
+         "scale": {
+          "type": "quantitative",
+          "colorRamp": {
+           "mode": "custom-sequential",
+           "colors": {
+            "start": "#E7F5FF",
+            "end": "#E8590C"
+           }
+          }
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Gap index by hour",
+        "showDescription": true,
+        "description": "Visit share \u00f7 departure share. > 1.5 = underserved"
+       }
+      }
+     },
+     "position": {
+      "x": 7,
+      "y": 7,
+      "width": 5,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "route-crowding",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_route",
+         "fields": [
+          {
+           "name": "line_label",
+           "expression": "`line_label`"
+          },
+          {
+           "name": "sum(overcrowded_share)",
+           "expression": "SUM(`overcrowded_share`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "sum(overcrowded_share)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         },
+         "displayName": "Trips overcrowded"
+        },
+        "y": {
+         "fieldName": "line_label",
+         "scale": {
+          "type": "categorical",
+          "sort": {
+           "by": "value"
+          }
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Bus lines serving this hub: % of trips overcrowded",
+        "showDescription": true,
+        "description": "TransLink Transit Service Performance Review 2025"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 13,
+      "width": 6,
+      "height": 7
+     }
+    },
+    {
+     "widget": {
+      "name": "period-load",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_period",
+         "fields": [
+          {
+           "name": "time_period",
+           "expression": "`time_period`"
+          },
+          {
+           "name": "season",
+           "expression": "`season`"
+          },
+          {
+           "name": "max(max_peak_load)",
+           "expression": "MAX(`max_peak_load`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "mark": {
+        "layout": "group"
+       },
+       "encodings": {
+        "x": {
+         "fieldName": "time_period",
+         "scale": {
+          "type": "categorical",
+          "sort": {
+           "by": "custom-order",
+           "orderedValues": [
+            "00-04 Night",
+            "04-06 Early",
+            "06-09 AM peak",
+            "09-15 Midday",
+            "15-18 PM peak",
+            "18-21 Evening",
+            "21-24 Late evening"
+           ]
+          }
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        },
+        "y": {
+         "fieldName": "max(max_peak_load)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         },
+         "displayName": "Busiest line load"
+        },
+        "color": {
+         "fieldName": "season",
+         "scale": {
+          "type": "categorical",
+          "mappings": [
+           {
+            "value": "Fall",
+            "color": "#E8590C"
+           },
+           {
+            "value": "Summer",
+            "color": "#FAB005"
+           }
+          ]
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "How full is the busiest line? Weekdays by time period",
+        "showDescription": true,
+        "description": "Peak load factor of the most crowded line; 100% = vehicle at capacity"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 13,
+      "width": 6,
+      "height": 7
+     }
+    },
+    {
+     "widget": {
+      "name": "forecast",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_forecast",
+         "fields": [
+          {
+           "name": "ds",
+           "expression": "`ds`"
+          },
+          {
+           "name": "visits",
+           "expression": "`visits`"
+          },
+          {
+           "name": "visits_forecast",
+           "expression": "`visits_forecast`"
+          },
+          {
+           "name": "visits_upper",
+           "expression": "`visits_upper`"
+          },
+          {
+           "name": "visits_lower",
+           "expression": "`visits_lower`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 1,
+       "widgetType": "forecast-line",
+       "encodings": {
+        "x": {
+         "fieldName": "ds",
+         "scale": {
+          "type": "temporal"
+         }
+        },
+        "y": {
+         "scale": {
+          "type": "quantitative",
+          "domainMin": 0
+         },
+         "original": {
+          "fieldName": "visits",
+          "displayName": "Daily visits"
+         },
+         "prediction": {
+          "fieldName": "visits_forecast",
+          "displayName": "ai_forecast"
+         },
+         "predictionUpper": {
+          "fieldName": "visits_upper"
+         },
+         "predictionLower": {
+          "fieldName": "visits_lower"
+         }
+        }
+       },
+       "annotations": [
+        {
+         "type": "vertical-line",
+         "encodings": {
+          "x": {
+           "dataValue": "2025-12-06T00:00:00.000",
+           "dataType": "DATETIME"
+          },
+          "label": {
+           "value": "UBC exam weekend"
+          },
+          "color": {
+           "value": {
+            "hex": "#E8590C"
+           }
+          }
+         }
+        },
+        {
+         "type": "vertical-line",
+         "encodings": {
+          "x": {
+           "dataValue": "2026-07-25T00:00:00.000",
+           "dataType": "DATETIME"
+          },
+          "label": {
+           "value": "Waterfront peak"
+          },
+          "color": {
+           "value": {
+            "hex": "#868E96"
+           }
+          }
+         }
+        }
+       ],
+       "frame": {
+        "showTitle": true,
+        "title": "Daily visits and forecast to Oct 2026",
+        "showDescription": true,
+        "description": "Databricks ai_forecast(); shaded band = 80% interval"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 20,
+      "width": 8,
+      "height": 7
+     }
+    },
+    {
+     "widget": {
+      "name": "surge-table",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_surge",
+         "fields": [
+          {
+           "name": "visit_date",
+           "expression": "`visit_date`"
+          },
+          {
+           "name": "weekday",
+           "expression": "`weekday`"
+          },
+          {
+           "name": "pings",
+           "expression": "`pings`"
+          },
+          {
+           "name": "surge_index",
+           "expression": "`surge_index`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "visit_date",
+          "displayName": "Date"
+         },
+         {
+          "fieldName": "weekday",
+          "displayName": "Day"
+         },
+         {
+          "fieldName": "pings",
+          "displayName": "Visits",
+          "format": {
+           "type": "number",
+           "abbreviation": "compact",
+           "decimalPlaces": {
+            "type": "max",
+            "places": 1
+           }
+          }
+         },
+         {
+          "fieldName": "surge_index",
+          "displayName": "\u00d7 normal",
+          "format": {
+           "type": "number",
+           "decimalPlaces": {
+            "type": "exact",
+            "places": 2
+           }
+          },
+          "style": {
+           "type": "basic",
+           "rules": [
+            {
+             "condition": {
+              "operand": {
+               "type": "data-value",
+               "value": "1.5"
+              },
+              "operator": ">="
+             },
+             "backgroundColor": {
+              "hex": "#FFD8C2"
+             }
+            }
+           ]
+          }
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Surge days",
+        "showDescription": true,
+        "description": "Visits \u2265 1.25\u00d7 the same weekday nearby"
+       }
+      }
+     },
+     "position": {
+      "x": 8,
+      "y": 20,
+      "width": 4,
+      "height": 7
+     }
+    },
+    {
+     "widget": {
+      "name": "origin-map",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_origin",
+         "fields": [
+          {
+           "name": "lat",
+           "expression": "`lat`"
+          },
+          {
+           "name": "lon",
+           "expression": "`lon`"
+          },
+          {
+           "name": "access_type",
+           "expression": "`access_type`"
+          },
+          {
+           "name": "sum(pings)",
+           "expression": "SUM(`pings`)"
+          }
+         ],
+         "disaggregated": false,
+         "filters": [
+          {
+           "expression": "`regional_pings` > 0"
+          }
+         ]
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "symbol-map",
+       "mark": {
+        "opacity": 0.75
+       },
+       "encodings": {
+        "coordinates": {
+         "latitude": {
+          "fieldName": "lat"
+         },
+         "longitude": {
+          "fieldName": "lon"
+         }
+        },
+        "color": {
+         "fieldName": "access_type",
+         "scale": {
+          "type": "categorical",
+          "mappings": [
+           {
+            "value": "One-seat ride",
+            "color": "#2B8A3E"
+           },
+           {
+            "value": "Transfer required",
+            "color": "#E8590C"
+           },
+           {
+            "value": "Local (same area)",
+            "color": "#1C7ED6"
+           },
+           {
+            "value": "Visitor (out of region)",
+            "color": "#868E96"
+           }
+          ]
+         }
+        },
+        "size": {
+         "fieldName": "sum(pings)",
+         "scale": {
+          "type": "quantitative"
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Where regional visitors come from",
+        "showDescription": true,
+        "description": "Bubble = visits. Orange = no one-seat transit ride to the hub"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 27,
+      "width": 7,
+      "height": 8
+     }
+    },
+    {
+     "widget": {
+      "name": "origin-bar",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_origin",
+         "fields": [
+          {
+           "name": "origin",
+           "expression": "`origin`"
+          },
+          {
+           "name": "access_type",
+           "expression": "`access_type`"
+          },
+          {
+           "name": "sum(regional_pings)",
+           "expression": "SUM(`regional_pings`)"
+          }
+         ],
+         "disaggregated": false,
+         "filters": [
+          {
+           "expression": "`regional_pings` > 0"
+          }
+         ]
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "bar",
+       "encodings": {
+        "x": {
+         "fieldName": "sum(regional_pings)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number",
+          "abbreviation": "compact",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         },
+         "displayName": "Visits"
+        },
+        "y": {
+         "fieldName": "origin",
+         "scale": {
+          "type": "categorical",
+          "sort": {
+           "by": "value"
+          }
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        },
+        "color": {
+         "fieldName": "access_type",
+         "scale": {
+          "type": "categorical",
+          "mappings": [
+           {
+            "value": "One-seat ride",
+            "color": "#2B8A3E"
+           },
+           {
+            "value": "Transfer required",
+            "color": "#E8590C"
+           },
+           {
+            "value": "Local (same area)",
+            "color": "#1C7ED6"
+           },
+           {
+            "value": "Visitor (out of region)",
+            "color": "#868E96"
+           }
+          ]
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Visits by origin and transit access"
+       }
+      }
+     },
+     "position": {
+      "x": 7,
+      "y": 27,
+      "width": 5,
+      "height": 8
+     }
+    },
+    {
+     "widget": {
+      "name": "recs",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_recs",
+         "fields": [
+          {
+           "name": "hub",
+           "expression": "`hub`"
+          },
+          {
+           "name": "priority_label",
+           "expression": "`priority_label`"
+          },
+          {
+           "name": "category",
+           "expression": "`category`"
+          },
+          {
+           "name": "recommendation",
+           "expression": "`recommendation`"
+          },
+          {
+           "name": "evidence",
+           "expression": "`evidence`"
+          }
+         ],
+         "disaggregated": true
+        }
+       }
+      ],
+      "spec": {
+       "version": 2,
+       "widgetType": "table",
+       "encodings": {
+        "columns": [
+         {
+          "fieldName": "priority_label",
+          "displayName": "Priority"
+         },
+         {
+          "fieldName": "category",
+          "displayName": "Issue"
+         },
+         {
+          "fieldName": "recommendation",
+          "displayName": "Recommended action (ai_query)"
+         },
+         {
+          "fieldName": "evidence",
+          "displayName": "Evidence"
+         },
+         {
+          "fieldName": "hub",
+          "displayName": "Hub"
+         }
+        ]
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Recommended service actions",
+        "showDescription": true,
+        "description": "Evidence computed in SQL; action sentence written by an LLM via ai_query(), limited to facts in the evidence"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 35,
+      "width": 12,
+      "height": 9
+     }
+    },
+    {
+     "widget": {
+      "name": "footer",
+      "multilineTextboxSpec": {
+       "lines": [
+        "**Sources:** hackathon synthetic visit pings (`ubc_rogersxdatabricks_hackathon.synthetic_data_ubc`) \u00b7 TransLink GTFS static feed (fall 2026) \u00b7 TransLink 2025 Transit Service Performance Review open data \u00b7 TransLink Transit Service Guidelines. All tables: `rgersxdatabricks_hackathon.hub_pulse`. See the *Method & validation* page."
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 44,
+      "width": 12,
+      "height": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "method",
+   "displayName": "Method & validation",
+   "pageType": "PAGE_TYPE_CANVAS",
+   "layoutVersion": "GRID_V1",
+   "layout": [
+    {
+     "widget": {
+      "name": "val-header",
+      "multilineTextboxSpec": {
+       "lines": [
+        "## Can synthetic pings stand in for real riders?\n",
+        "\n",
+        "Waterfront's weekday ping profile tracks TransLink's **real 2025 SkyTrain boardings + alightings at Waterfront Station** with a correlation of **r \u2248 0.92**. Shifting the pings by 3 hours drops it to 0.38 \u2014 which is also how we confirmed the source timestamps are local time, despite their `Z` suffix."
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 3
+     }
+    },
+    {
+     "widget": {
+      "name": "val-line",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_validation",
+         "fields": [
+          {
+           "name": "hour_label",
+           "expression": "`hour_label`"
+          },
+          {
+           "name": "sum(pings_share)",
+           "expression": "SUM(`pings_share`)"
+          },
+          {
+           "name": "sum(skytrain_share)",
+           "expression": "SUM(`skytrain_share`)"
+          }
+         ],
+         "disaggregated": false
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "line",
+       "encodings": {
+        "x": {
+         "fieldName": "hour_label",
+         "scale": {
+          "type": "categorical"
+         },
+         "axis": {
+          "hideTitle": true
+         }
+        },
+        "y": {
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         },
+         "fields": [
+          {
+           "fieldName": "sum(pings_share)",
+           "displayName": "Visit pings (hackathon)"
+          },
+          {
+           "fieldName": "sum(skytrain_share)",
+           "displayName": "SkyTrain riders (TransLink 2025)"
+          }
+         ]
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "Waterfront weekday: share of daily activity by hour"
+       }
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 3,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "seabus",
+      "queries": [
+       {
+        "name": "main_query",
+        "query": {
+         "datasetName": "ds_seabus",
+         "fields": [
+          {
+           "name": "hour",
+           "expression": "`hour`"
+          },
+          {
+           "name": "direction",
+           "expression": "`direction`"
+          },
+          {
+           "name": "avg(utilization)",
+           "expression": "AVG(`utilization`)"
+          }
+         ],
+         "disaggregated": false,
+         "filters": [
+          {
+           "expression": "`day_type` = 'MF'"
+          },
+          {
+           "expression": "`season` = 'Fall'"
+          }
+         ]
+        }
+       }
+      ],
+      "spec": {
+       "version": 3,
+       "widgetType": "line",
+       "encodings": {
+        "x": {
+         "fieldName": "hour",
+         "scale": {
+          "type": "quantitative"
+         },
+         "displayName": "Hour"
+        },
+        "y": {
+         "fieldName": "avg(utilization)",
+         "scale": {
+          "type": "quantitative"
+         },
+         "format": {
+          "type": "number-percent",
+          "decimalPlaces": {
+           "type": "max",
+           "places": 1
+          }
+         },
+         "displayName": "Volume \u00f7 capacity"
+        },
+        "color": {
+         "fieldName": "direction",
+         "scale": {
+          "type": "categorical"
+         }
+        }
+       },
+       "frame": {
+        "showTitle": true,
+        "title": "SeaBus (Waterfront \u2194 Lonsdale): hourly volume vs capacity",
+        "showDescription": true,
+        "description": "Fall weekdays, TSPR 2025"
+       }
+      }
+     },
+     "position": {
+      "x": 6,
+      "y": 3,
+      "width": 6,
+      "height": 6
+     }
+    },
+    {
+     "widget": {
+      "name": "method",
+      "multilineTextboxSpec": {
+       "lines": [
+        "### Method\n",
+        "\n",
+        "1. **Demand** \u2013 visit pings per hub, hour and day type (weekday / Saturday / Sunday-holiday), averaged over days.\n",
+        "2. **Supply** \u2013 TransLink GTFS trips calling at stops within 800 m (UBC Exchange) or 300 m (Waterfront, Park Royal), resolved on representative fall 2026 dates.\n",
+        "3. **Gap index** \u2013 an hour's share of daily visits \u00f7 its share of daily departures. Scale-free, so synthetic volumes are never compared to real counts. > 1.5 underserved, < 0.67 overserved.\n",
+        "4. **Crowding** \u2013 each hub's bus lines joined to TSPR 2025 overcrowding, peak load factor and bunching. Spare service is only proposed where the busiest line is under 85% full.\n",
+        "5. **Access** \u2013 an origin has a one-seat ride if a line serving the hub stops within 1 km (bus) or 2 km (rail/SeaBus station) of its centroid.\n",
+        "6. **Surges & forecast** \u2013 visits vs the same weekday \u00b14 weeks; `ai_forecast()` projects Sep\u2013Oct 2026.\n",
+        "7. **Recommendations** \u2013 rules assemble evidence; `ai_query()` writes a one-line action restricted to that evidence.\n",
+        "\n",
+        "**Limitations:** pings measure people at a hub, not boardings; origin centroids are approximate; 10 months of history limits seasonal forecasting."
+       ]
+      }
+     },
+     "position": {
+      "x": 0,
+      "y": 9,
+      "width": 12,
+      "height": 7
+     }
+    }
+   ]
+  }
+ ],
+ "uiSettings": {
+  "theme": {
+   "canvasBackgroundColor": {
+    "light": "#F8F9FA",
+    "dark": "#1A1D21"
+   },
+   "widgetBackgroundColor": {
+    "light": "#FFFFFF",
+    "dark": "#101316"
+   },
+   "widgetBorderColor": {
+    "light": "#FFFFFF",
+    "dark": "#101316"
+   },
+   "fontColor": {
+    "light": "#1B1F24",
+    "dark": "#E9ECEF"
+   },
+   "selectionColor": {
+    "light": "#1C7ED6",
+    "dark": "#74C0FC"
+   },
+   "visualizationColors": [
+    "#E8590C",
+    "#1C7ED6",
+    "#2B8A3E",
+    "#AE3EC9",
+    "#FAB005",
+    "#15AABF",
+    "#868E96"
+   ],
+   "widgetHeaderAlignment": "LEFT",
+   "widgetCornerRadius": 10
+  },
+  "genieSpace": {
+   "isEnabled": true,
+   "overrideId": "01f1b9ba76251c4684f359bee3795d70",
+   "enablementMode": "ENABLED"
+  }
+ }
+}
