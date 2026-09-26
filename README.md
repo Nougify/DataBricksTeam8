@@ -16,7 +16,13 @@ Start with [`hub_pulse/HANDOFF.md`](hub_pulse/HANDOFF.md) for setup, IDs and how
 
 ## Local services
 
-The root-level `backend/` and `frontend/` services run together through Docker Compose. Start them with:
+The root-level `backend/` and `frontend/` services run together through Docker Compose.
+
+The surge-dispatch backend is defined in [`backend/SPEC.md`](backend/SPEC.md).
+Its dependency-ordered delivery chunks are tracked in
+[`backend/IMPLEMENTATION_PLAN.md`](backend/IMPLEMENTATION_PLAN.md).
+
+Start the services with:
 
 ```sh
 docker compose up --build
