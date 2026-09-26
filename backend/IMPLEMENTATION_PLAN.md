@@ -9,21 +9,24 @@ replace the old v1 plan and are not a record of completed work.
 
 At this revision:
 
-- Chunks 01 and 02 are complete. The Python 3.13/FastAPI service has typed v2 runtime
+- Chunks 01 through 03 are complete. The Python 3.13/FastAPI service has typed v2 runtime
   configuration, shared REST/WebSocket origin policy, application lifespan
   ownership, consistent error envelopes, locked dependencies, and non-root Docker
   startup. `app/main.py` serves `/healthz`.
 - The canonical v2 domain primitives, immutable schedules, internal dispatch
   metadata, public read schemas, and entity serializers are defined and tested.
+- Typed, versioned data readers now sit behind validated fixture, exported-snapshot,
+  and prepared parameterized Databricks adapters. Snapshot refresh is atomic,
+  leakage-sensitive caches include version/as-of inputs, and failed refreshes retain
+  the prior valid snapshot without fixture fallback.
 - The v2 simulation APIs, coordinator, analytics adapters, and WebSocket are
   still to be implemented. Existing models do not establish v2 completion.
 - Existing hub_pulse analysis can supply several read views, but the hourly
   rolling-origin forecast, trailing baseline, and evaluation artifacts are
   explicit data deliverables, not assumed available.
 
-The next implementation step is **03**. Begin the data deliverables as soon as
-their schema dependency is ready; do not postpone forecast validation until after
-building the dispatcher.
+The next implementation step is **04**, while **D1** can proceed in parallel. Do
+not postpone forecast validation until after building the dispatcher.
 
 ## 2. Working rules and completion gates
 

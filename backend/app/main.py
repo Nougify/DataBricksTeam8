@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Literal
 
 from fastapi import FastAPI
@@ -7,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
+from app.data.adapters import build_snapshot_source
+from app.data.fixtures import fixture_now
+from app.data.store import SnapshotStore
 from app.errors import install_error_handlers
 from app.runtime import RuntimeOwner
 
@@ -20,7 +24,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-        application.state.runtime = RuntimeOwner(settings=resolved_settings)
+        source = build_snapshot_source(resolved_settings)
+        data = SnapshotStore(source)
+        now = (
+            fixture_now()
+            if resolved_settings.data_mode.value == "fixture"
+            else datetime.now().astimezone()
+        )
+        data.refresh(now)
+        application.state.runtime = RuntimeOwner(settings=resolved_settings, data=data)
         yield
 
     application = FastAPI(
