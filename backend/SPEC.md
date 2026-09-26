@@ -1074,6 +1074,6 @@ views are explicit exceptions to the operational no-future-actuals rule.
 | Trip/bus mapping | Section 6.3 resolves approved-but-not-moving behavior; frontend mocks must match |
 | Hosted backend | Hosting provider remains undecided; must support public HTTPS/WSS and the single authoritative simulation |
 
-`IMPLEMENTATION_PLAN.md` was written for v1 and must be reconciled with this
-spec before following its remaining chunks. This document is authoritative for
-the v2 API and behavior.
+`IMPLEMENTATION_PLAN.md` defines the v2 dependency-ordered implementation chunks,
+data deliverables, and completion gates. This specification remains authoritative
+for the v2 API and behavior.
