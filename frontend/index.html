@@ -11,7 +11,7 @@
       <p id="status">Checking backend status...</p>
     </main>
     <script>
-      fetch("/api/health")
+      fetch("/healthz")
         .then((response) => response.json())
         .then((data) => {
           document.getElementById("status").textContent = `Backend status: ${data.status}`;

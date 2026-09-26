@@ -9,20 +9,21 @@ replace the old v1 plan and are not a record of completed work.
 
 At this revision:
 
-- The Python 3.13/FastAPI scaffold, uv lockfile, Dockerfile, configuration, and
-  health tests exist. `app/main.py` serves `/healthz` and legacy `/api/health`.
-- Initial domain models and tests exist locally in `app/domain/` and
-  `tests/domain/`, but still use v1 prediction fields and lifecycle states.
-  Inspect and evolve this work rather than replacing it blindly.
+- Chunk 01 is complete. The Python 3.13/FastAPI service has typed v2 runtime
+  configuration, shared REST/WebSocket origin policy, application lifespan
+  ownership, consistent error envelopes, locked dependencies, and non-root Docker
+  startup. `app/main.py` serves `/healthz`.
+- The discarded v1 domain model draft is no longer present. Chunk 02 starts from
+  the canonical v2 contract in `SPEC.md`.
 - The v2 simulation APIs, coordinator, analytics adapters, and WebSocket are
   still to be implemented. Existing models do not establish v2 completion.
 - Existing hub_pulse analysis can supply several read views, but the hourly
   rolling-origin forecast, trailing baseline, and evaluation artifacts are
   explicit data deliverables, not assumed available.
 
-The next implementation step is **01, then 02**. Begin the data deliverables as
-soon as their schema dependency is ready; do not postpone forecast validation
-until after building the dispatcher.
+The next implementation step is **02**. Begin the data deliverables as soon as
+their schema dependency is ready; do not postpone forecast validation until after
+building the dispatcher.
 
 ## 2. Working rules and completion gates
 
@@ -37,8 +38,8 @@ until after building the dispatcher.
   reservations, and snapshot/event ordering must share that authority.
 - Implement only v2 public states/events. Do not build automatic dispatch or
   v1 start/reset endpoints and plan to retrofit approval and seek later.
-- Retain `/api/health` compatibility. The frontend target is port 3001 with
-  configurable REST/WebSocket URLs and allowed origins.
+- The frontend target is port 3001 with configurable REST/WebSocket URLs and
+  allowed origins. Do not add compatibility routes without a concrete consumer.
 - No silent fixture fallback, invented backtest metrics, future-observation
   leakage, or implicit conversion of pings to passengers.
 - For Databricks execution, follow repository skill guidance, ask which CLI
@@ -117,7 +118,7 @@ anyone attempts Databricks ingestion.
 - Establish single-worker application lifespan ownership and consistent error
   envelopes, including FastAPI validation errors.
 
-**Verify:** health compatibility, invalid settings, allowed/denied REST origins,
+**Verify:** health contract, invalid settings, allowed/denied REST origins,
 error envelopes, non-root container startup, and locked dependency installation.
 **Done when:** the service boots with v2 defaults and the existing checks pass.
 

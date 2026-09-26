@@ -953,7 +953,7 @@ the snapshot; return a structured 503 for missing required data. Seeking must no
 destroy a working state if reconstruction data is unavailable. Cache/query keys
 include dataset version and relevant as-of time/vintage to prevent future leaks.
 
-- GET `/healthz`: `{"status":"ok"}`. Keep legacy `/api/health` compatibility.
+- GET `/healthz`: `{"status":"ok"}`.
 - GET `/readyz`: `{status: "ready" | "degraded" | "not_ready", components:
   {gtfs: string, prediction_source: string, analytics: string, simulation: string}}`.
   Return 200 if simulation prerequisites are usable (including cached/degraded
