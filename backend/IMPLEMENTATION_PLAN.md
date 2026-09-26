@@ -9,19 +9,19 @@ replace the old v1 plan and are not a record of completed work.
 
 At this revision:
 
-- Chunk 01 is complete. The Python 3.13/FastAPI service has typed v2 runtime
+- Chunks 01 and 02 are complete. The Python 3.13/FastAPI service has typed v2 runtime
   configuration, shared REST/WebSocket origin policy, application lifespan
   ownership, consistent error envelopes, locked dependencies, and non-root Docker
   startup. `app/main.py` serves `/healthz`.
-- The discarded v1 domain model draft is no longer present. Chunk 02 starts from
-  the canonical v2 contract in `SPEC.md`.
+- The canonical v2 domain primitives, immutable schedules, internal dispatch
+  metadata, public read schemas, and entity serializers are defined and tested.
 - The v2 simulation APIs, coordinator, analytics adapters, and WebSocket are
   still to be implemented. Existing models do not establish v2 completion.
 - Existing hub_pulse analysis can supply several read views, but the hourly
   rolling-origin forecast, trailing baseline, and evaluation artifacts are
   explicit data deliverables, not assumed available.
 
-The next implementation step is **02**. Begin the data deliverables as soon as
+The next implementation step is **03**. Begin the data deliverables as soon as
 their schema dependency is ready; do not postpone forecast validation until after
 building the dispatcher.
 
@@ -175,8 +175,9 @@ before workspace execution and an agreed destination for new artifacts.
 - Document zero/no-sample behavior and partial-hour availability. Keep centered
   daily indexes isolated in retrospective outputs.
 
-**Verify:** both DST boundaries, holiday mapping, future-row perturbations cannot
-change earlier baselines, zero denominators, early warm-up, and source row counts.
+**Verify:** historical DST boundaries, permanent Pacific time after March 8, 2026,
+holiday mapping, future-row perturbations cannot change earlier baselines, zero
+denominators, early warm-up, and source row counts.
 **Done when:** a reproducible pipeline/export provides real as-of demand inputs
 with provenance and usable coverage; adapter contract checks from 03 pass.
 

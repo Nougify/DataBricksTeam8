@@ -97,13 +97,15 @@ Recommended modules are `app/api/routes`, `app/api/schemas`, `app/domain`,
 
 ### 3.2 Time and hourly identity
 
-- Serialize aware ISO 8601 timestamps in `America/Vancouver`, using the timezone
-  database for the correct offset at the instant. Never hard-code an offset by
-  month or assume a DST transition happens at midnight.
+- Serialize aware ISO 8601 timestamps in `America/Vancouver`. Use historical
+  timezone-database offsets through B.C.'s final spring transition on March 8,
+  2026, then permanent UTC-07:00 Pacific time. Do not apply the superseded 2026
+  fall rollback that may remain in older timezone databases.
 - Instant-based hourly rows carry `time`, `local_date`, and `hour` (0–23).
   `local_date` and `hour` are display/grouping fields, not a unique key on a
-  fall-back day: use the offset-bearing `time` as the bucket key. The two repeated
-  hours have different offsets. Spring-forward days omit the nonexistent hour.
+  historical fall-back day: use the offset-bearing `time` as the bucket key. The
+  two repeated hours have different offsets. Historical spring-forward days omit
+  the nonexistent hour; after March 8, 2026, Vancouver has no clock changes.
   Typical 24-hour profiles are not instant-based rows and only carry `hour`.
 - The source hackathon timestamps ending in `Z` represent local wall-clock time,
   according to the supplied data validation. The source adapter must interpret
@@ -973,8 +975,9 @@ Use deterministic fixtures and a fake clock. Required tests include:
 
 - Canonical schema equality across state/lists/events and TripDetail extension;
   explicit nulls, error envelope, CORS, and generated OpenAPI compatibility.
-- Source wall-clock normalization, both DST transitions, repeated bucket keys,
-  invalid offsets, GTFS >24-hour times, and representative-day mapping.
+- Source wall-clock normalization, historical DST transitions, permanent Pacific
+  time after March 8, 2026, repeated bucket keys, invalid offsets, GTFS >24-hour
+  times, and representative-day mapping.
 - Forecast training/issuance cutoffs, exact historical vintages, trailing-only
   baselines, insufficient history, zero denominators, and partial-hour masking.
 - Actuals after at remain hidden; retrospective endpoints stay isolated from
