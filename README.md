@@ -13,3 +13,13 @@ Our project lives in [`hub_pulse/`](hub_pulse/). It compares when people are act
 Key finding: Park Royal and Waterfront can close most of their service gap by rescheduling at zero cost; UBC's peak buses are already over capacity, so it needs about 5% more midday service.
 
 Start with [`hub_pulse/HANDOFF.md`](hub_pulse/HANDOFF.md) for setup, IDs and how to rebuild everything.
+
+## Local services
+
+The root-level `backend/` and `frontend/` services run together through Docker Compose. Start them with:
+
+```sh
+docker compose up --build
+```
+
+Open `http://localhost:3000` to view the frontend. It verifies the backend through `/api/health`; the backend is also available directly at `http://localhost:8000/api/health`.

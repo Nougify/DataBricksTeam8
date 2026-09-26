@@ -18,7 +18,7 @@ Team 13's entry for the Rogers × Databricks "Data Intelligence for Smarter Comm
 
 ## Repository state
 
-The repo holds only a README and the onboarding guide. There is no source code, build system or tests yet, so add build/test commands to this file once they exist. `.claude/`, `.databricks/` and `.ai-dev-kit/` hold Databricks AI dev-kit tooling and skills, not project code.
+The main project assets live in `hub_pulse/`. Root-level `backend/` and `frontend/` provide a Docker Compose local-service baseline; start it with `docker compose up --build`. `.claude/`, `.databricks/` and `.ai-dev-kit/` hold Databricks AI dev-kit tooling and skills, not project code.
 
 ## Databricks
 
