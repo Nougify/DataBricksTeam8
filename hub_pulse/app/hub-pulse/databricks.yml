@@ -1,0 +1,46 @@
+bundle:
+  name: hub-pulse
+
+variables:
+  sql_warehouse_id:
+    description: SQL Warehouse ID
+  genie_space_id:
+    description: Default Genie Space ID
+  genie_space_name:
+    description: Genie Space display name
+
+resources:
+  apps:
+    app:
+      name: "hub-pulse"
+      description: "Hub Pulse: what-if transit service planner for UBC, Waterfront Station and Park Royal Mall"
+      source_code_path: ./
+
+      # Start the app automatically on deploy.
+      lifecycle:
+        started: true
+      user_api_scopes:
+        - dashboards.genie
+
+      # The resources which this app has access to.
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.sql_warehouse_id}
+            permission: CAN_USE
+        - name: genie-space
+          genie_space:
+            name: ${var.genie_space_name}
+            space_id: ${var.genie_space_id}
+            permission: CAN_RUN
+
+targets:
+  default:
+    default: true
+    workspace:
+      host: https://dbc-4e20a0bf-b569.cloud.databricks.com
+
+    variables:
+      sql_warehouse_id: 93d96b01c499de55
+      genie_space_id: 01f1b9ba76251c4684f359bee3795d70
+      genie_space_name: Hub Pulse — Ask about Vancouver transit hubs
