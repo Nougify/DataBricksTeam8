@@ -1,6 +1,5 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import { FlaskConical, Monitor, Moon, Sun, WifiOff, type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Badge } from "@/components/ui/badge";
@@ -86,8 +85,6 @@ const THEMES: { value: ThemeChoice; label: string; icon: LucideIcon }[] = [
   { value: "dark", label: "Dark", icon: Moon },
   { value: "system", label: "System", icon: Monitor },
 ];
-
-const noopSubscribe = () => () => {};
 
 /** The stored theme choice; "system" during SSR and hydration so the markup matches. */
 export function useThemeChoice(): [ThemeChoice, (value: string) => void] {

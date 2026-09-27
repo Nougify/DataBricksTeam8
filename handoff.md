@@ -81,3 +81,11 @@ All Milestone 1 automated checks pass:
 
 ## Request for Clarification
 Please answer the questions listed in each issue section to proceed with confident implementation. If any assumptions are acceptable, indicate so; otherwise, we will await your feedback before implementing changes.
+
+
+## Changes Made by Codex (as of 2026-09-26)
+* web/src/features/topbar/StatusControls.tsx – Fixed React getServerSnapshot error by replacing problematic useSyncExternalStore call in useThemeChoice() with direct useTheme() usage, resolving hydration mismatch while preserving theme functionality.
+* web/src/features/map/layers/HubMarkers.tsx – Adjusted hub label for Park Royal to avoid overlap with CARTO's "West Vancouver" label (style={{ marginTop: hub.id === 'park-royal' ? '-2px' : 0 }}).
+* web/src/features/shell/Console.tsx – Set minimum height of 200px for phone map view (added min-h-[200px] to map section className) and fixed duplicate <section aria-label="Map"> line that caused JSX parsing error.
+* spec.md – Added Implementation Status section summarizing completed work and checklist.
+* web/src/mocks/handlers/read.ts – Verified Park Royal mismatch percentage is correctly set to 11.5%; confirmed no outdated 0.6% references remain related to mismatch (remaining "0.6%" is only for halo ring opacity styling).
