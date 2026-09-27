@@ -1,0 +1,12 @@
+[
+  {
+    "route": { "...": "RouteRef (§0.1)" },
+    "pct_trips_overcrowded": 20.3,
+    "avg_peak_load_factor": 104,
+    "pct_bunching": 12.1,
+    "pct_on_time": 71.4,
+    "avg_weekday_boardings": 55000,
+    "weekly_trips_at_hub": 1500,
+    "source": "TransLink TSPR 2025"
+  }
+]

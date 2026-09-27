@@ -1,0 +1,1292 @@
+# Backend contract: frontend requests (v2 draft)
+
+This is the original contract with the frontend's requests added. Tags:
+
+- **[CHANGED]**: an endpoint, object or event from the original contract that the frontend needs modified.
+- **[NEW]**: something the frontend needs that isn't in the original.
+- **[RETIRED]**: an original item replaced by something else. The replacement is named.
+- Untagged text is unchanged from the original.
+
+The frontend is a Next.js ops console for a TransLink dispatcher. It runs on `http://localhost:3001`. It shows a map of the 3 hubs, forecasts replayed against actuals, where people are coming from, and human-approved dispatch proposals. It also has a what-if planner, findings, and proof that the model works.
+
+---
+
+## Summary of requests
+
+**Blocking: the demo can't work without these**
+
+1. **An hourly forecast that is backtested over the replay period (Nov 2025 – Aug 2026).** Today `gold_hub_forecast` is daily-only and covers Sep–Oct 2026, which is outside the replay window. We need a table like `gold_hub_forecast_hourly(hub, issued_at, target_hour, lead_h, forecast, lower_80, upper_80)`. It must be built without future leakage, so a forecast issued at T only uses data before T.
+2. **An hourly surge index with no look-ahead:** `surge_index = pings ÷ typical pings`. "Typical" means the same hub, day type and hour, averaged over trailing weeks before T. The existing daily `surge_index` in `gold_hub_daily` uses a centred ±4-week window, so it sees the future. That's fine for the timeline, but it must be labelled retrospective.
+3. **Human approval for dispatches.** The engine proposes a trip, and the dispatcher approves or rejects it: new `POST .../approve` and `.../reject`, new trip status `PROPOSED`, new bus status `RESERVED`.
+4. **Seek on the simulation clock** (`PUT /simulation/time`), so the UI can jump to any date and hour in the replay window with the date picker, presets and timeline scrubber.
+5. **One shape per object.** `/state`, the list endpoints and WebSocket events must return identical Surge, Bus and Trip objects.
+
+**Changes to existing endpoints:** conventions (§0), shared objects (§0.1), and sections 1–12 below.
+
+**New endpoints (§13–§28, plus §8b, §9b, §11b):** meta, hubs, hub status, forecast, origins, timeline, events, route load, late-night, hourly profile, overview, route crowding, recommendations, findings, backtest, validation, seek, approve/reject, settings.
+
+**Open questions for you:** at the end of this file.
+
+---
+
+## 0. Conventions [NEW]
+
+- **Base path:** `/api/v1` for REST and `/api/v1/ws/simulation` for the WebSocket. The frontend reads both base URLs from env vars.
+  - Note: today `backend/server.js` only serves `/api/health`.
+- **CORS:** allow `http://localhost:3001` and `http://127.0.0.1:3001`. Make the list configurable (e.g. `CORS_ORIGINS`) so a Vercel domain can be added later.
+- **Time:** ISO 8601 with the correct **America/Vancouver** offset for that date: `-08:00` in PST (Nov 2 2025 – Mar 8 2026) and `-07:00` in PDT.
+  - Every hourly row **also** carries `local_date` (`"2025-12-06"`) and `hour` (0–23). The replay crosses both DST changes, so the frontend keys hourly buckets on `local_date` + `hour`, never on epoch math.
+  - The hackathon table's `timestamp` has a `Z` suffix but is **local wall-clock time**. This was validated against TransLink ridership (r = 0.92). Don't convert it from UTC.
+- **Hub ids:**
+
+  | `hub_id` | `location_name` in the data |
+  |---|---|
+  | `ubc` | `UBC` |
+  | `waterfront` | `Waterfront Station` |
+  | `park-royal` | `Park Royal Mall` |
+
+- **Day types:** `mf`, `sat`, `sun_hol`. The gold tables use `MF`, `Sat` and `Sun/Hol`.
+- **Units:**
+  - `pings` are integer device pings, not riders.
+  - Any field ending in `_pct` is 0–100.
+  - Indexes are ratios: `1.0` = typical, and `1.25` or more is a surge.
+- **Route references** always carry both ids:
+  - `route_id`: the GTFS `route_id`, exactly as in `routes.txt`.
+  - `line_key`: the public line number used in the `hub_pulse` gold tables, e.g. `"99"`, `"R4"`.
+- **Nulls:** send explicit `null`, never leave out a documented field.
+- **Errors:** `{"error": {"code": "SOME_CODE", "message": "Human readable"}}` with a matching HTTP status. A 409 on a trip also includes the current `"trip"` object (see §9b).
+
+## 0.1 Shared objects [NEW]
+
+Every endpoint and WebSocket event that returns one of these objects returns **the full object in this exact shape**.
+
+### RouteRef
+
+```json
+{
+  "route_id": "6612",
+  "line_key": "99",
+  "short_name": "99",
+  "long_name": "Commercial-Broadway / UBC (B-Line)",
+  "mode": "Bus",
+  "color": "#0060A9",
+  "text_color": "#FFFFFF"
+}
+```
+
+- `mode`: `Bus`, `SkyTrain`, `SeaBus` or `West Coast Express`.
+- `color` and `text_color` come from GTFS `route_color`/`route_text_color`. If GTFS has none, they are `null`.
+- All values above are examples.
+
+### Clock (simulation)
+
+```json
+{
+  "current_time": "2025-12-06T10:00:00-08:00",
+  "local_date": "2025-12-06",
+  "hour": 10,
+  "speed": 60,
+  "status": "PAUSED",
+  "min_time": "2025-11-15T00:00:00-08:00",
+  "max_time": "2026-08-31T23:00:00-07:00",
+  "approval_mode": "MANUAL",
+  "auto_pause_on_proposal": true,
+  "epoch": 3
+}
+```
+
+- `status`: `RUNNING` or `PAUSED`.
+- `epoch` goes up by one on every seek (§8b). The frontend drops anything tagged with an older epoch.
+
+### HubStatus
+
+```json
+{
+  "hub_id": "ubc",
+  "as_of": "2025-12-06T13:20:00-08:00",
+  "current_hour": {
+    "local_date": "2025-12-06",
+    "hour": 13,
+    "pings_so_far": 1840,
+    "typical_pings_so_far": 1305,
+    "complete": false
+  },
+  "last_full_hour": {
+    "local_date": "2025-12-06",
+    "hour": 12,
+    "pings": 3920,
+    "typical_pings": 2610,
+    "surge_index": 1.5,
+    "is_surge": true
+  },
+  "next_surge": {
+    "surge_id": "surge-123",
+    "window_start": "2025-12-06T13:00:00-08:00",
+    "surge_index": 1.79,
+    "severity": "HIGH"
+  },
+  "active_trip_count": 2,
+  "pending_proposal_count": 1
+}
+```
+
+`next_surge` is `null` when no surge is forecast.
+
+### Surge [CHANGED]
+
+```json
+{
+  "id": "surge-123",
+  "hub_id": "ubc",
+  "location_name": "UBC Exchange",
+  "location": { "lat": 49.2606, "lon": -123.246 },
+  "detected_at": "2025-12-06T10:00:00-08:00",
+  "predicted_window": {
+    "start": "2025-12-06T13:00:00-08:00",
+    "end": "2025-12-06T15:00:00-08:00"
+  },
+  "lead_time_minutes": 180,
+  "magnitude": {
+    "predicted_pings": 4680,
+    "typical_pings": 2610,
+    "surge_index": 1.79,
+    "lower_80": 4100,
+    "upper_80": 5250
+  },
+  "severity": "HIGH",
+  "drivers": [
+    { "type": "EXAM", "label": "UBC December exam period", "event_id": "evt-ubc-exams-2025w1" }
+  ],
+  "predicted_destinations": [
+    {
+      "origin": "Surrey",
+      "location": { "lat": 49.1897, "lon": -122.848 },
+      "share_pct": 14.5,
+      "expected_pings": 680
+    }
+  ],
+  "status": "AWAITING_APPROVAL",
+  "phase": "UPCOMING",
+  "additional_trip_ids": ["trip-456"],
+  "actual": null
+}
+```
+
+What changed from the original:
+
+- **New fields:**
+  - `hub_id`: `null` when the surge is not at one of the 3 hubs.
+  - `location_name`, `detected_at`, `lead_time_minutes`, `magnitude`, `severity`, `drivers`, `phase`, `actual`.
+- **`predicted_time` is [RETIRED].** Use `predicted_window.start`.
+- **`additional_trip_id` becomes `additional_trip_ids[]`.** One surge can need several buses.
+- **`predicted_destinations[]`** gains `origin`, `share_pct` and `expected_pings`. These are the home/origin areas of the people in the surge, taken from the `origin` column, i.e. where they're likely to travel next.
+- **`magnitude` numbers** describe the **peak hour** inside `predicted_window`.
+- **`severity`:** `LOW` for 1.25–1.5, `MEDIUM` for 1.5–1.75, `HIGH` for 1.75 or more. Please publish the cut-offs in `/meta`.
+- **`drivers[].type`:** `EXAM`, `HOLIDAY`, `SPORTS`, `CONCERT`, `FESTIVAL`, `NIGHTLIFE`, `WEATHER`, `OTHER`. The list is empty if nothing is known.
+- **`actual`** stays `null` until `phase = RESOLVED`. Then it becomes `{"pings": 4912, "surge_index": 1.88}`. This lets the demo show that the prediction came true.
+
+`status` describes the dispatch; `phase` describes time.
+
+`status` values:
+
+| Status | Meaning |
+|---|---|
+| `PENDING` | Detected; no proposal yet |
+| `AWAITING_APPROVAL` **[NEW]** | At least one trip is `PROPOSED` |
+| `DISPATCHED` | At least one trip was approved |
+| `NO_MATCHING_ROUTE` | No route connects the surge to its destinations |
+| `NO_BUS_AVAILABLE` | No spare bus can arrive in time |
+| `EXPIRED` | The window started before any trip was approved |
+
+If every proposal is rejected, the surge goes back to `PENDING` and the engine may propose an alternative. If none is possible, it becomes `NO_BUS_AVAILABLE`.
+
+`phase` **[NEW]** values:
+
+| Phase | Meaning |
+|---|---|
+| `UPCOMING` | Before the window |
+| `ACTIVE` | Inside the window |
+| `RESOLVED` | After the window; `actual` is filled |
+
+### Bus [CHANGED]
+
+```json
+{
+  "id": "bus-3",
+  "status": "RESERVED",
+  "location": { "lat": 49.25, "lon": -123.1 },
+  "heading_deg": 245,
+  "capacity": 77,
+  "source": {
+    "type": "ROUTE",
+    "route": { "route_id": "6620", "line_key": "25", "short_name": "25", "long_name": "Brentwood Station / UBC", "mode": "Bus", "color": null, "text_color": null },
+    "depot_name": null
+  },
+  "assigned_trip_id": null,
+  "proposed_trip_id": "trip-456"
+}
+```
+
+What changed from the original:
+
+- **New fields:** `heading_deg`, `capacity`, `source`, `proposed_trip_id`.
+- **`source`** says where the spare bus came from. This is the "low-demand route" in our pitch:
+  - `type` is `ROUTE` or `DEPOT`.
+  - When `type` is `DEPOT`, `route` is `null` and `depot_name` is set.
+- **New status `RESERVED`:** the bus is held for a `PROPOSED` trip, so two proposals can't claim the same bus.
+
+Bus statuses: `AVAILABLE`, `RESERVED` **[NEW]**, `DEADHEADING`, `WAITING`, `IN_SERVICE`, `RETURNING`, `REPOSITIONING`.
+
+**Trip status → bus status [NEW]:**
+
+| Trip status | Bus status |
+|---|---|
+| `PROPOSED` | `RESERVED` |
+| `APPROVED` / `BUS_EN_ROUTE` | `DEADHEADING`, or `WAITING` once it reaches the surge stop |
+| `IN_SERVICE` | `IN_SERVICE` |
+| `COMPLETED` | `RETURNING`, then `AVAILABLE` |
+| `REJECTED` / `EXPIRED` / `CANCELLED` | `AVAILABLE`, or `RETURNING` if it already moved |
+
+Please confirm the table or send your own.
+
+### AdditionalTrip [CHANGED]
+
+```json
+{
+  "id": "trip-456",
+  "surge_id": "surge-123",
+  "hub_id": "ubc",
+  "bus": { "id": "bus-3" },
+  "route": {
+    "route_id": "6612", "line_key": "99", "short_name": "99", "long_name": "Commercial-Broadway / UBC (B-Line)",
+    "mode": "Bus", "color": "#0060A9", "text_color": "#FFFFFF",
+    "load_before_pct": 104,
+    "load_after_pct": 91
+  },
+  "donor_route": {
+    "route_id": "6620", "line_key": "25", "short_name": "25", "long_name": "Brentwood Station / UBC",
+    "mode": "Bus", "color": null, "text_color": null,
+    "load_before_pct": 48,
+    "load_after_pct": 55
+  },
+  "status": "PROPOSED",
+  "proposed_at": "2025-12-06T10:00:00-08:00",
+  "approval_expires_at": "2025-12-06T10:45:00-08:00",
+  "dispatch_time": "2025-12-06T12:20:00-08:00",
+  "arrival_at_surge_time": "2025-12-06T12:40:00-08:00",
+  "arrives_before_surge": true,
+  "departure_time": "2025-12-06T12:55:00-08:00",
+  "estimated_completion_time": "2025-12-06T13:45:00-08:00",
+  "surge_location": { "lat": 49.2606, "lon": -123.246 },
+  "predicted_destinations": [
+    { "origin": "Surrey", "location": { "lat": 49.1897, "lon": -122.848 }, "share_pct": 14.5, "expected_pings": 680 }
+  ],
+  "deadhead_path": { "type": "LineString", "coordinates": [[-123.1, 49.25], [-123.11, 49.255], [-123.246, 49.2606]] },
+  "service_path": { "type": "LineString", "coordinates": [[-123.246, 49.2606], [-123.15, 49.264], [-123.069, 49.262]] },
+  "impact": {
+    "added_capacity": 77,
+    "deadhead_minutes": 20,
+    "deadhead_km": 11.4
+  },
+  "rationale": "UBC is forecast at 1.79x typical 13:00-15:00; route 25 runs at 48% then, so one bus can move without crowding it.",
+  "evidence": [
+    { "label": "Forecast surge index, UBC 13:00-15:00", "value": "1.79x", "source": "gold_hub_forecast_hourly" },
+    { "label": "Route 99 peak load, midday", "value": "104%", "source": "TransLink TSPR 2025" },
+    { "label": "Route 25 load, midday", "value": "48%", "source": "TransLink TSPR 2025" }
+  ],
+  "replaces_trip_id": null,
+  "progress": { "percent_complete": 0.0 }
+}
+```
+
+What changed from the original:
+
+- **New fields:**
+  - `hub_id`, `donor_route`, `proposed_at`, `approval_expires_at`.
+  - `dispatch_time`, `arrival_at_surge_time`, `arrives_before_surge`, `estimated_completion_time`.
+  - `impact`, `rationale`, `evidence`, `replaces_trip_id`.
+- **`route`** is now a full RouteRef (the route the extra trip runs on) plus `load_before_pct` and `load_after_pct`. These are the busiest-period load on that route without and with this trip.
+- **`donor_route`** has the same shape. It shows the route the bus is pulled from, with its load before and after. It is `null` when the bus comes from a depot.
+- **`/state` returns this same object.** In the original, `/state` used a flat `bus_id`/`route_id` while `/additional-trips` nested them.
+- **Timing:** the frontend animates buses locally from `dispatch_time` → `arrival_at_surge_time` along `deadhead_path`, then `departure_time` → `estimated_completion_time` along `service_path`. Please keep these times consistent with the paths.
+- **`approval_expires_at` is in simulation time.** Nothing expires while the clock is paused.
+- **`evidence[]`** is what makes a recommendation traceable to data, which judges score. Please always include at least the surge forecast and the route loads.
+- **`impact`** reports capacity and deadhead cost. It does not report "riders served", because pings are not riders.
+
+Trip statuses:
+
+| Status | Meaning |
+|---|---|
+| `PROPOSED` **[NEW]** | Waiting for the dispatcher |
+| `APPROVED` **[NEW]** | Approved; the bus hasn't left yet |
+| `BUS_EN_ROUTE` | Bus deadheading to the surge |
+| `IN_SERVICE` | Running the extra trip |
+| `COMPLETED` | Finished |
+| `REJECTED` **[NEW]** | The dispatcher rejected it |
+| `EXPIRED` **[NEW]** | Not approved before `approval_expires_at` |
+| `CANCELLED` **[NEW]** | Approved, but later withdrawn by the engine, e.g. the forecast dropped below the threshold. Please send the reason in `rationale`. |
+
+---
+
+## 1. `GET /api/v1/state` [CHANGED]
+
+### What it is
+
+Returns the **complete current simulation state**.
+
+This is the main endpoint the frontend calls when it first loads. **[NEW]** The frontend also calls it after any `state.reset` WebSocket event, and after every WebSocket reconnect.
+
+### What changed
+
+- New `epoch` and `last_seq` fields. After refetching, the frontend drops buffered WebSocket events with `seq <= last_seq` or with an older `epoch`.
+- New `hubs[]`: one HubStatus per hub.
+- `surges`, `buses` and `additional_trips` use exactly the shared objects in §0.1.
+
+### Output
+
+```json
+{
+  "epoch": 3,
+  "last_seq": 1042,
+  "simulation": { "...": "Clock object (§0.1)" },
+  "hubs": [ { "...": "HubStatus (§0.1)" } ],
+  "surges": [ { "...": "Surge (§0.1)" } ],
+  "buses": [ { "...": "Bus (§0.1)" } ],
+  "additional_trips": [ { "...": "AdditionalTrip (§0.1)" } ]
+}
+```
+
+---
+
+## 2. `GET /api/v1/surges` [CHANGED]
+
+### What it is
+
+Returns the **surge predictions ingested from Databricks**.
+
+These represent where demand is expected, when it is expected, and where passengers are predicted to travel.
+
+### What changed
+
+- It returns the Surge object (§0.1).
+- **[NEW]** Optional filters: `?hub_id=ubc`, `?phase=UPCOMING|ACTIVE|RESOLVED`, `?status=...`.
+
+### Output
+
+```json
+[ { "...": "Surge (§0.1)" } ]
+```
+
+Possible status values: `PENDING`, `AWAITING_APPROVAL` **[NEW]**, `DISPATCHED`, `NO_MATCHING_ROUTE`, `NO_BUS_AVAILABLE`, `EXPIRED`.
+
+---
+
+## 3. `GET /api/v1/buses` [CHANGED]
+
+### What it is
+
+Returns the **simulated spare bus fleet**.
+
+These are the buses that the dispatch system is allowed to assign to surge demand.
+
+### What changed
+
+It returns the Bus object (§0.1), with the new `source`, `capacity`, `heading_deg`, `proposed_trip_id` and `RESERVED` status.
+
+### Output
+
+```json
+[ { "...": "Bus (§0.1)" } ]
+```
+
+Possible bus statuses: `AVAILABLE`, `RESERVED` **[NEW]**, `DEADHEADING`, `WAITING`, `IN_SERVICE`, `RETURNING`, `REPOSITIONING`.
+
+---
+
+## 4. `GET /api/v1/additional-trips` [CHANGED]
+
+### What it is
+
+Returns all **one-time additional bus trips created by the dispatch engine**. **[CHANGED]** Every trip starts as a *proposal* (`PROPOSED`) that the dispatcher approves or rejects.
+
+This is the main data structure representing the backend's decision.
+
+### What changed
+
+- It returns the AdditionalTrip object (§0.1).
+- **[NEW]** Optional filters: `?status=PROPOSED`, `?hub_id=ubc`, `?surge_id=...`.
+
+### Output
+
+```json
+[ { "...": "AdditionalTrip (§0.1)" } ]
+```
+
+The important frontend fields are:
+
+```text
+departure_time, dispatch_time, arrival_at_surge_time, estimated_completion_time
+bus, route (+ load before/after), donor_route (+ load before/after)
+surge_location, predicted_destinations
+deadhead_path, service_path
+status, approval_expires_at
+progress
+impact, rationale, evidence
+```
+
+---
+
+## 5. `GET /api/v1/additional-trips/{trip_id}` [CHANGED]
+
+### What it is
+
+Returns the **full details for one dynamically dispatched bus**.
+
+Useful when the user clicks a bus or dispatch on the frontend. **[NEW]** It also backs the "Preview" view of a proposal.
+
+### What changed
+
+It returns every AdditionalTrip field (§0.1), plus the detail-only fields you already had:
+
+- `bus.current_location`
+- `progress.current_stop_id` and `progress.next_stop_id`
+- `surge`: the full Surge object, replacing the partial copy.
+
+### Output
+
+```json
+{
+  "...": "all AdditionalTrip fields (§0.1)",
+  "bus": {
+    "id": "bus-3",
+    "current_location": { "lat": 49.258, "lon": -123.121 }
+  },
+  "surge": { "...": "Surge (§0.1)" },
+  "progress": {
+    "percent_complete": 0.18,
+    "current_stop_id": "stop-123",
+    "next_stop_id": "stop-456"
+  }
+}
+```
+
+---
+
+## 6. `GET /api/v1/routes` [CHANGED]
+
+### What it is
+
+Returns the **TransLink routes loaded from GTFS**.
+
+This lets the frontend display available routes and associate additional trips with real routes.
+
+### What changed
+
+- **[NEW]** Query params:
+  - `?hub_id=ubc` returns only routes serving that hub.
+  - `?include_shape=true|false` (default `false`). All ~240 routes with full shapes are too heavy.
+- **[NEW]** Shapes are simplified to about 300 points per route or fewer. `MultiLineString` is fine.
+- **[NEW]** Each item is a RouteRef (§0.1) plus `serves_hub_ids[]` and `shape`.
+
+### Output
+
+```json
+[
+  {
+    "route_id": "6612",
+    "line_key": "99",
+    "short_name": "99",
+    "long_name": "Commercial-Broadway / UBC (B-Line)",
+    "mode": "Bus",
+    "color": "#0060A9",
+    "text_color": "#FFFFFF",
+    "serves_hub_ids": ["ubc"],
+    "shape": { "type": "LineString", "coordinates": [] }
+  }
+]
+```
+
+---
+
+## 7. `GET /api/v1/routes/{route_id}` [CHANGED]
+
+### What it is
+
+Returns information about a **specific TransLink route**, including its stops, shape and normal scheduled trips.
+
+### What changed
+
+- **[NEW]** Query params: `?date=YYYY-MM-DD&from=HH:MM&to=HH:MM`.
+  - Defaults: the simulation's current date, and a window from 1 h before to 3 h after the simulation time.
+  - Without these params it's unclear which day's `scheduled_departures` come back.
+- Top-level fields follow RouteRef (§0.1).
+- `scheduled_departures[]` gains `stop_id`: the departure's first stop inside a hub catchment, if any.
+
+### Output
+
+```json
+{
+  "route_id": "6612",
+  "line_key": "99",
+  "short_name": "99",
+  "long_name": "Commercial-Broadway / UBC (B-Line)",
+  "mode": "Bus",
+  "color": "#0060A9",
+  "text_color": "#FFFFFF",
+  "stops": [
+    {
+      "id": "stop-123",
+      "name": "Broadway-City Hall Station",
+      "location": { "lat": 49.263, "lon": -123.115 }
+    }
+  ],
+  "shape": { "type": "LineString", "coordinates": [] },
+  "scheduled_departures": [
+    { "trip_id": "gtfs-trip-1", "departure_time": "2025-12-06T17:10:00-08:00", "stop_id": "stop-123" },
+    { "trip_id": "gtfs-trip-2", "departure_time": "2025-12-06T17:20:00-08:00", "stop_id": "stop-123" }
+  ]
+}
+```
+
+---
+
+## 8. `GET /api/v1/simulation` [CHANGED]
+
+### What it is
+
+Returns the current **simulation clock state**.
+
+### What changed
+
+It returns the Clock object (§0.1). The new fields are `local_date`, `hour`, `min_time`, `max_time`, `approval_mode`, `auto_pause_on_proposal` and `epoch`.
+
+**[NEW] Startup:** the server starts `PAUSED` at a configurable demo time (`default_start_time` in `/meta`, e.g. `2025-12-06T09:00:00-08:00`). The clock is global, one per server, which is fine for the demo.
+
+### Output
+
+```json
+{ "...": "Clock (§0.1)" }
+```
+
+## 8b. `PUT /api/v1/simulation/time` [NEW]: seek
+
+### What it is
+
+Jumps the simulation clock to any time between `min_time` and `max_time`. The date picker, scenario presets, timeline scrubber, "Show me" links and "Reset demo" all use it.
+
+### Input
+
+```json
+{ "current_time": "2025-12-06T10:00:00-08:00" }
+```
+
+### Behaviour
+
+- The server rebuilds the state at T **deterministically**, so the same T always gives the same state:
+  - Surges detected before T whose window hasn't ended are recreated.
+  - Earlier approvals and rejections by the user are discarded.
+  - Proposals whose window is still open come back as `PROPOSED` with a fresh `approval_expires_at`.
+  - Buses are reset.
+- Keeps the current `status` (paused or running) and `speed`.
+- Increments `epoch`, then emits `state.reset` on the WebSocket.
+- Returns 400 `OUT_OF_RANGE` if T is outside `[min_time, max_time]`.
+
+### Output
+
+```json
+{ "...": "Clock (§0.1), with the new epoch" }
+```
+
+---
+
+## 9. `PUT /api/v1/simulation/speed` [CHANGED]
+
+### What it is
+
+Changes how quickly simulated time progresses.
+
+### What changed
+
+- Allowed speeds are `1`, `60`, `300`, `900` and `3600`, listed in `/meta.allowed_speeds`.
+- Any other value returns 400 `INVALID_SPEED`.
+
+### Input
+
+```json
+{
+  "speed": 60
+}
+```
+
+### Output
+
+```json
+{ "...": "Clock (§0.1)" }
+```
+
+## 9b. `POST /api/v1/additional-trips/{trip_id}/approve` and `POST /api/v1/additional-trips/{trip_id}/reject` [NEW]
+
+### What it is
+
+Lets the dispatcher approve or reject a proposed trip, the human-in-the-loop step.
+
+### Input
+
+```json
+{ "epoch": 3 }
+```
+
+For reject:
+
+```json
+{ "epoch": 3, "reason": "Driver shortage on route 25" }
+```
+
+### Behaviour
+
+- **Approve and reject are processed one at a time.** An approve that races the expiry gets a clear answer.
+- **Approving an already `APPROVED` trip returns 200,** so a double-click is safe.
+- **Reject** releases the bus to `AVAILABLE`. The engine may then propose an alternative, which carries `replaces_trip_id` = the rejected trip.
+- Each call emits `dispatch.approved` or `dispatch.rejected` on the WebSocket.
+
+### Output
+
+The updated AdditionalTrip (§0.1).
+
+### Errors
+
+409 responses include the current trip:
+
+```json
+{
+  "error": { "code": "TRIP_EXPIRED", "message": "Proposal expired at 10:45 before it was approved." },
+  "trip": { "...": "AdditionalTrip (§0.1)" }
+}
+```
+
+| Code | When |
+|---|---|
+| `TRIP_EXPIRED` | The proposal expired first |
+| `TRIP_REJECTED` | Approving a trip that was already rejected |
+| `TRIP_NOT_PROPOSED` | Any other state conflict |
+| `STALE_EPOCH` | The request's epoch is older than the server's (the user seeked meanwhile) |
+
+---
+
+## 10. `POST /api/v1/simulation/pause`
+
+### What it is
+
+Pauses the simulation.
+
+### Output
+
+```json
+{ "...": "Clock (§0.1) with status PAUSED" }
+```
+
+---
+
+## 11. `POST /api/v1/simulation/resume`
+
+### What it is
+
+Resumes the simulation.
+
+### Output
+
+```json
+{ "...": "Clock (§0.1) with status RUNNING" }
+```
+
+## 11b. `PUT /api/v1/simulation/settings` [NEW]
+
+### What it is
+
+Holds settings that must live on the server so they don't race the clock at high speed.
+
+At 3600x, 200 ms of network latency is 12 simulated minutes. So when a trip becomes `PROPOSED` and `auto_pause_on_proposal` is on, **the server** pauses the clock at that simulated instant. It then emits `simulation.state_changed` with `reason: "AUTO_PAUSE_PROPOSAL"`.
+
+### Input
+
+```json
+{ "auto_pause_on_proposal": true }
+```
+
+### Output
+
+```json
+{ "...": "Clock (§0.1)" }
+```
+
+---
+
+## 12. `WS /api/v1/ws/simulation` [CHANGED]
+
+### What it is
+
+WebSocket used to send **live simulation changes to the frontend**.
+
+The frontend loads the initial state using:
+
+```text
+GET /api/v1/state
+```
+
+and then listens here for changes.
+
+### What changed
+
+- **[NEW] Envelope.** Every message is:
+
+  ```json
+  {
+    "type": "surge.updated",
+    "seq": 1043,
+    "epoch": 3,
+    "simulation_time": "2025-12-06T10:00:00-08:00",
+    "data": { }
+  }
+  ```
+
+  `seq` is strictly increasing across all message types.
+- **[NEW] Full-object upserts.** Entity events carry the **whole** object from §0.1, not a partial one, so the frontend can just replace its copy.
+- **[NEW] Rate limits:**
+  - `simulation.tick` and `bus.positions_updated` at most 4 times per second of wall time. The frontend extrapolates in between.
+  - Send positions in one batched message, not one message per bus.
+- **[NEW] Reconnect:** the frontend reconnects with backoff, then refetches `/state`. No replay buffer is needed on the server.
+
+### Events
+
+| Type | `data` | Notes |
+|---|---|---|
+| `simulation.tick` **[NEW]** | `{ "current_time", "local_date", "hour" }` | 4/s or fewer |
+| `simulation.state_changed` **[NEW]** | Clock (§0.1) + `"reason"` | `reason` is one of `PAUSED`, `RESUMED`, `SPEED`, `SETTINGS`, `AUTO_PAUSE_PROPOSAL` |
+| `state.reset` **[NEW]** | `{ "epoch": 4, "reason": "SEEK" }` | Frontend refetches `/state` |
+| `surge.updated` **[NEW]** | Surge (§0.1) | On create **and** every change (status, phase, actual). Replaces `surge.detected` |
+| `dispatch.proposed` **[NEW]** | AdditionalTrip (§0.1) | Trip enters `PROPOSED`. Replaces `dispatch.created` |
+| `dispatch.approved` **[NEW]** | AdditionalTrip (§0.1) | Trip enters `APPROVED` |
+| `dispatch.rejected` **[NEW]** | AdditionalTrip (§0.1) | Trip enters `REJECTED` |
+| `trip.updated` **[NEW]** | AdditionalTrip (§0.1) | Every other trip status change (`BUS_EN_ROUTE`, `IN_SERVICE`, `COMPLETED`, `EXPIRED`, `CANCELLED`) and progress. Replaces `trip.started` / `trip.completed` |
+| `bus.updated` **[NEW]** | Bus (§0.1) | Status or assignment change |
+| `bus.positions_updated` **[NEW]** | `{ "positions": [ { "bus_id", "location", "heading_deg", "status" } ] }` | Batched. Replaces `bus.position_updated` |
+| `hub.demand_updated` **[NEW]** | HubStatus (§0.1) | Once per hub on each simulated hour boundary |
+
+Every trip status change emits exactly one of `dispatch.proposed`, `dispatch.approved`, `dispatch.rejected` or `trip.updated`.
+
+### Original events [RETIRED]
+
+These are kept below for reference. Please stop sending them once the new events exist.
+
+- `bus.position_updated`: replaced by `bus.positions_updated` (batched).
+- `surge.detected`: replaced by `surge.updated`.
+- `dispatch.created`: replaced by `dispatch.proposed`, because trips now need approval.
+- `trip.started` and `trip.completed`: replaced by `trip.updated`.
+
+Original bus movement event:
+
+```json
+{
+  "type": "bus.position_updated",
+  "simulation_time": "2026-09-26T17:13:20-07:00",
+  "data": {
+    "bus_id": "bus-3",
+    "location": { "lat": 49.258, "lon": -123.121 },
+    "status": "DEADHEADING"
+  }
+}
+```
+
+Original new surge event:
+
+```json
+{
+  "type": "surge.detected",
+  "simulation_time": "2026-09-26T17:05:00-07:00",
+  "data": {
+    "surge_id": "surge-123",
+    "location": { "lat": 49.263, "lon": -123.115 },
+    "predicted_time": "2026-09-26T17:18:00-07:00"
+  }
+}
+```
+
+Original dispatch event:
+
+```json
+{
+  "type": "dispatch.created",
+  "simulation_time": "2026-09-26T17:05:01-07:00",
+  "data": {
+    "trip_id": "trip-456",
+    "surge_id": "surge-123",
+    "bus_id": "bus-3",
+    "route_id": "099",
+    "departure_time": "2026-09-26T17:16:00-07:00"
+  }
+}
+```
+
+Original trip started and completed events:
+
+```json
+{ "type": "trip.started", "simulation_time": "2026-09-26T17:16:00-07:00", "data": { "trip_id": "trip-456", "bus_id": "bus-3" } }
+{ "type": "trip.completed", "simulation_time": "2026-09-26T18:04:00-07:00", "data": { "trip_id": "trip-456", "bus_id": "bus-3" } }
+```
+
+---
+
+# New read endpoints [NEW]
+
+These feed the hub panel, map, timeline and proof views. Where a `hub_pulse` gold table or app query already computes the data, it's named. All tables live in `rgersxdatabricks_hackathon.hub_pulse`. The queries are in `hub_pulse/app/hub-pulse/config/queries/`.
+
+All `?at=` params default to the current simulation time. **No endpoint may return actual data for times after `at`.** The replay must not leak the future.
+
+## 13. `GET /api/v1/meta` [NEW]
+
+Static configuration the UI needs once at startup.
+
+```json
+{
+  "timezone": "America/Vancouver",
+  "data_start": "2025-11-01",
+  "data_end": "2026-08-31",
+  "default_start_time": "2025-12-06T09:00:00-08:00",
+  "allowed_speeds": [1, 60, 300, 900, 3600],
+  "forecast_horizons_hours": [3, 6, 12, 24],
+  "surge_threshold": 1.25,
+  "severity_bands": { "LOW": 1.25, "MEDIUM": 1.5, "HIGH": 1.75 },
+  "late_night": { "start_hour": 0, "end_hour_exclusive": 5 },
+  "route_load_thresholds": { "overcrowded_pct": 85, "spare_pct": 60 },
+  "day_types": [
+    { "id": "mf", "label": "Weekday" },
+    { "id": "sat", "label": "Saturday" },
+    { "id": "sun_hol", "label": "Sunday / holiday" }
+  ],
+  "presets": [
+    { "id": "ubc-exams", "label": "UBC exam weekend", "hub_id": "ubc", "time": "2025-12-06T09:00:00-08:00", "description": "Exam-weekend surge, 1.72x a normal Saturday" },
+    { "id": "park-royal-boxing-day", "label": "Boxing Day at Park Royal", "hub_id": "park-royal", "time": "2025-12-26T08:00:00-08:00", "description": "Boxing Day shopping, 1.47x" },
+    { "id": "waterfront-jul-25", "label": "Waterfront, Jul 25", "hub_id": "waterfront", "time": "2026-07-25T10:00:00-07:00", "description": "Biggest Waterfront day, 1.83x" },
+    { "id": "normal-weekday", "label": "Normal weekday 1 PM", "hub_id": null, "time": "2026-02-11T10:00:00-08:00", "description": "Baseline midday" },
+    { "id": "saturday-night", "label": "Saturday late night", "hub_id": null, "time": "2026-02-14T22:00:00-08:00", "description": "Nightlife and late-night gaps" }
+  ],
+  "sources": [
+    { "name": "Rogers synthetic cell-tower pings", "used_for": "Demand, origins, surges" },
+    { "name": "TransLink GTFS static (fall 2026)", "url": "https://gtfs-static.translink.ca/gtfs/google_transit.zip", "used_for": "Routes, stops, scheduled departures" },
+    { "name": "TransLink TSPR 2025", "url": "https://www.translink.ca/plans-and-projects/managing-the-transit-network", "used_for": "Route crowding, peak load" }
+  ],
+  "pipeline_refreshed_at": "2026-09-26T08:00:00-07:00"
+}
+```
+
+The preset dates, times and descriptions are suggestions based on the surge days in `gold_hub_daily`. Please adjust them to moments where your engine produces a good proposal.
+
+## 14. `GET /api/v1/hubs` [NEW]
+
+Static hub list (`dim_hub`).
+
+```json
+[
+  {
+    "id": "ubc",
+    "name": "UBC",
+    "location_name": "UBC",
+    "location": { "lat": 49.2606, "lon": -123.246 },
+    "catchment_m": 800,
+    "description": "UBC Exchange and campus",
+    "lines_serving": 12
+  }
+]
+```
+
+## 15. `GET /api/v1/hubs/{hub_id}/status?at=` [NEW]
+
+Returns one HubStatus (§0.1). The same data is embedded in `/state.hubs[]` and pushed by `hub.demand_updated`.
+
+## 16. `GET /api/v1/hubs/{hub_id}/forecast?at=&horizon_hours=6&history_hours=6` [NEW]
+
+This drives the main chart: recent actuals next to the forecast N hours ahead. It needs the hourly backtest table from the blocking requests.
+
+```json
+{
+  "hub_id": "ubc",
+  "issued_at": "2025-12-06T10:00:00-08:00",
+  "horizon_hours": 6,
+  "surge_threshold": 1.25,
+  "typical_basis": "Mean pings for the same day type and hour over the 8 weeks before issued_at",
+  "model": { "name": "ai_forecast hourly", "trained_through": "2025-12-06T09:00:00-08:00", "granularity": "hour" },
+  "rows": [
+    {
+      "time": "2025-12-06T04:00:00-08:00", "local_date": "2025-12-06", "hour": 4, "kind": "HISTORY",
+      "actual_pings": 410, "forecast_pings": 395, "forecast_issued_at": "2025-12-05T22:00:00-08:00",
+      "lower_80": 330, "upper_80": 460, "typical_pings": 380, "surge_index": 1.08, "is_surge": false
+    },
+    {
+      "time": "2025-12-06T10:00:00-08:00", "local_date": "2025-12-06", "hour": 10, "kind": "CURRENT",
+      "actual_pings": 1210, "hour_complete": false, "forecast_pings": 2400, "forecast_issued_at": "2025-12-06T04:00:00-08:00",
+      "lower_80": 2050, "upper_80": 2760, "typical_pings": 1900, "surge_index": 1.26, "is_surge": true
+    },
+    {
+      "time": "2025-12-06T13:00:00-08:00", "local_date": "2025-12-06", "hour": 13, "kind": "FORECAST",
+      "actual_pings": null, "forecast_pings": 4680, "forecast_issued_at": "2025-12-06T10:00:00-08:00",
+      "lower_80": 4100, "upper_80": 5250, "typical_pings": 2610, "surge_index": 1.79, "is_surge": true
+    }
+  ]
+}
+```
+
+- **`HISTORY` rows** show the forecast that was issued `horizon_hours` before that hour, so the user can see how the N-hours-ahead forecast did. Their `surge_index` = actual ÷ typical.
+- **`CURRENT` rows** are the in-progress hour. `actual_pings` is the count so far.
+- **`FORECAST` rows** use the forecast issued at `at`. Their `surge_index` = forecast ÷ typical.
+- There is one row per hour. On DST days, expect a missing or repeated `hour`.
+
+## 17. `GET /api/v1/hubs/{hub_id}/origins?at=&basis=actual|typical` [NEW]
+
+"Where people are coming from" for the selected hub and time. It drives the map arcs and bubbles.
+
+- **`basis=actual`:** pings in the last full hour before `at`.
+- **`basis=typical`:** the average for the same day type and hour.
+- This is the `gold_origin_access` logic sliced by hour.
+
+```json
+{
+  "hub_id": "ubc",
+  "basis": "actual",
+  "window": { "start": "2025-12-06T12:00:00-08:00", "end": "2025-12-06T13:00:00-08:00" },
+  "day_type": "sat",
+  "total_pings": 3920,
+  "low_sample": false,
+  "origins": [
+    {
+      "origin": "Surrey",
+      "region": "Metro Vancouver",
+      "location": { "lat": 49.1897, "lon": -122.848 },
+      "pings": 568,
+      "share_pct": 14.5,
+      "share_of_local_pct": 17.2,
+      "avg_dwell_min": 95.3,
+      "access_type": "TRANSFER_REQUIRED",
+      "direct_lines": [],
+      "n_direct_lines": 0
+    },
+    {
+      "origin": "Ontario",
+      "region": "Out of province",
+      "location": null,
+      "pings": 41,
+      "share_pct": 1.0,
+      "share_of_local_pct": null,
+      "avg_dwell_min": 180.2,
+      "access_type": "VISITOR",
+      "direct_lines": [],
+      "n_direct_lines": 0
+    }
+  ]
+}
+```
+
+- **Rows:** all 36 origins, including zero-ping ones.
+- **`location`:** `null` for the 7 out-of-region origins. The centroids come from `dim_origin`.
+- **`access_type`:** one of `ONE_SEAT_RIDE`, `TRANSFER_REQUIRED`, `LOCAL`, `VISITOR`, mapped from the gold strings.
+- **`direct_lines`:** a list of `line_key` values.
+- **`low_sample`:** `true` when `total_pings` is under 200.
+
+## 18. `GET /api/v1/timeline?from=YYYY-MM-DD&to=YYYY-MM-DD` [NEW]
+
+Daily totals for the bottom timeline scrubber (`gold_hub_daily`).
+
+```json
+{
+  "note": "daily_surge_index is retrospective (centred +/-4 weeks); context only, not a forecast",
+  "days": [
+    {
+      "local_date": "2025-12-06",
+      "weekday": "Saturday",
+      "day_type": "sat",
+      "hubs": {
+        "ubc": { "pings": 61234, "daily_surge_index": 1.72, "is_surge": true },
+        "waterfront": { "pings": 30112, "daily_surge_index": 1.02, "is_surge": false },
+        "park-royal": { "pings": 19870, "daily_surge_index": 1.1, "is_surge": false }
+      }
+    }
+  ]
+}
+```
+
+## 19. `GET /api/v1/events?from=&to=&hub_id=` [NEW]
+
+Events, exams and holidays, used to explain surges (`drivers[]`) and mark the timeline.
+
+```json
+[
+  {
+    "id": "evt-ubc-exams-2025w1",
+    "label": "UBC December exam period",
+    "category": "EXAM",
+    "start": "2025-12-04T00:00:00-08:00",
+    "end": "2025-12-19T23:59:00-08:00",
+    "hub_ids": ["ubc"],
+    "source_name": "UBC academic calendar",
+    "source_url": "https://..."
+  }
+]
+```
+
+`category` uses the `drivers[].type` values. Only BC holidays exist in the pipeline today (`02_silver.sql`). Exams, sports and concerts need a small curated CSV with source URLs. See the open questions.
+
+## 20. `GET /api/v1/routes/load?at=&hub_id=` [NEW]
+
+Route load for the current period. This powers the "need vs spare" view and colours routes on the map.
+
+```json
+[
+  {
+    "route": { "...": "RouteRef (§0.1)" },
+    "time_period": "09-15 Midday",
+    "load_pct": 104,
+    "load_basis": "TSPR_2025_TYPICAL",
+    "tspr_peak_load_pct": 104,
+    "pct_trips_overcrowded_2025": 20.3,
+    "classification": "OVERCROWDED",
+    "spare_buses_available": 0
+  }
+]
+```
+
+- **`load_basis`:**
+  - `TSPR_2025_TYPICAL`: the TSPR peak load for that day type and period.
+  - `MODEL_ESTIMATE`: your engine's estimate for this exact hour.
+- **`classification`:**
+  - `OVERCROWDED` when `load_pct` is 85 or more (the same threshold as the planner).
+  - `SPARE` when it's below `spare_pct` in `/meta`.
+  - `NORMAL` otherwise.
+- **Sources:** `tspr_bus_peakload` and `gold_route_stress`.
+
+## 21. `GET /api/v1/hubs/{hub_id}/late-night?at=` [NEW]
+
+The late-night safety view, **00:00–05:00** (hours 0–4). It shows people present versus the buses running.
+
+```json
+{
+  "hub_id": "ubc",
+  "night_date": "2025-12-07",
+  "window": { "start": "2025-12-07T00:00:00-08:00", "end": "2025-12-07T05:00:00-08:00" },
+  "hours": [
+    {
+      "local_date": "2025-12-07", "hour": 1,
+      "actual_pings": null, "forecast_pings": 640, "typical_pings": 420,
+      "share_of_daily_pct": 1.4,
+      "departures_typical": 2, "lines_running": 1,
+      "lines": [ { "...": "RouteRef, e.g. N17" } ]
+    }
+  ],
+  "share_of_daily_pct": 6.1,
+  "departures_basis": "Typical fall 2026 GTFS timetable for this day type",
+  "top_nights": [
+    { "night_date": "2026-01-01", "pings_00_05": 5210, "departures_typical": 9, "surge_index": 2.1 }
+  ]
+}
+```
+
+- **Which night:** if `at` is before 05:00, the endpoint returns the night in progress. Otherwise it returns the next night.
+- **`actual_pings`:** `null` for hours after `at`.
+- **`share_of_daily_pct`:**
+  - On each hour row, it's that hour's share of the day's pings: actual if known, otherwise forecast. The UI uses it to flag "waiting-alone risk" hours.
+  - At the top level, it's the share for the whole 00:00–05:00 window.
+- **`top_nights`:** covers the whole dataset and is labelled as such in the UI.
+- **`departures_typical`:** comes from `gold_hub_supply_hourly`. It's the typical timetable for the day type, not that specific date.
+
+## 22. `GET /api/v1/hubs/{hub_id}/hourly-profile?day_type=mf|sat|sun_hol` [NEW]
+
+Inputs for the what-if planner. It's the existing `hub_hours.sql` shape.
+
+```json
+{
+  "hub_id": "ubc",
+  "day_type": "mf",
+  "season_label": "Fall (pings Sep-May) vs fall 2026 GTFS timetable",
+  "rows": [
+    {
+      "hour": 13,
+      "avg_pings": 2819.5,
+      "departures": 112,
+      "bus_departures": 112,
+      "skytrain_departures": 0,
+      "seabus_departures": 0,
+      "lines_running": 10,
+      "status": "UNDERSERVED",
+      "time_period": "09-15 Midday",
+      "peak_load_pct": 78.9,
+      "most_crowded_line": "99 WEST"
+    }
+  ]
+}
+```
+
+- **Always 24 rows (hours 0–23).** Fill missing hours with 0. Hours with no pings drop out of the SQL join today.
+- **`status`:** one of `UNDERSERVED`, `OVERSERVED`, `BALANCED`, `NO_SERVICE`.
+- **`peak_load_pct`:** the old `max_peak_load_factor`. Use 0 when unknown, which the planner reads as "unknown".
+
+## 23. `GET /api/v1/hubs/{hub_id}/overview` [NEW]
+
+Headline KPIs (`hub_overview.sql`). **Every KPI carries its own period and source.**
+
+```json
+{
+  "hub_id": "ubc",
+  "kpis": [
+    { "key": "pings", "label": "Pings in dataset", "value": 10324110, "unit": "pings", "period": "Nov 2025 - Aug 2026", "comparison": null, "source": "gold_hub_daily" },
+    { "key": "surge_days", "label": "Surge days", "value": 14, "unit": "days", "period": "Nov 2025 - Aug 2026", "comparison": { "label": "Top", "value": "Dec 6, 1.72x" }, "source": "gold_hub_daily" },
+    { "key": "transfer_share", "label": "Regional visitors needing a transfer", "value": 47.6, "unit": "%", "period": "Nov 2025 - Aug 2026", "comparison": null, "source": "gold_origin_access + GTFS" },
+    { "key": "worst_line", "label": "Most overcrowded line", "value": 20.3, "unit": "% trips overcrowded", "period": "2025", "comparison": { "label": "Line", "value": "99 B-Line" }, "source": "TransLink TSPR 2025" },
+    { "key": "peak_load", "label": "Peak load", "value": 104, "unit": "% of capacity", "period": "Fall weekdays 2025", "comparison": { "label": "Where", "value": "99 WEST, 06-09 AM peak" }, "source": "TransLink TSPR 2025" }
+  ]
+}
+```
+
+## 24. `GET /api/v1/hubs/{hub_id}/route-crowding` [NEW]
+
+TSPR 2025 performance for each bus line serving the hub (`gold_route_stress`). Rows are sorted by `pct_trips_overcrowded` from highest to lowest.
+
+```json
+[
+  {
+    "route": { "...": "RouteRef (§0.1)" },
+    "pct_trips_overcrowded": 20.3,
+    "avg_peak_load_factor": 104,
+    "pct_bunching": 12.1,
+    "pct_on_time": 71.4,
+    "avg_weekday_boardings": 55000,
+    "weekly_trips_at_hub": 1500,
+    "source": "TransLink TSPR 2025"
+  }
+]
+```
+
+## 25. `GET /api/v1/hubs/{hub_id}/recommendations` [NEW]
+
+Long-term schedule findings (`gold_recommendations`), plus `links[]` so the UI's "Show me" button can seek the simulation to the evidence.
+
+```json
+[
+  {
+    "id": "rec-ubc-1",
+    "priority": 1,
+    "category": "Add or retime midday service",
+    "recommendation": "Fund about 112 extra weekday departures between 11:00 and 14:00 at UBC.",
+    "evidence": "Weekdays underserved at 11:00/12:00/13:00 ...",
+    "links": [
+      { "label": "Weekday 13:00 at UBC", "hub_id": "ubc", "local_date": "2026-02-11", "hour": 13, "route_id": null }
+    ]
+  }
+]
+```
+
+## 26. `GET /api/v1/findings` [NEW]
+
+The network-wide headline table (`hub_pulse/HANDOFF.md` §2). These numbers came from `hub_pulse/analysis/scenarios.ts`. Hard-coding them from that output is fine.
+
+```json
+{
+  "day_type": "mf",
+  "hubs": [
+    {
+      "hub_id": "park-royal",
+      "mismatch_pct": 19.4,
+      "pings_in_underserved_hours_pct": 16.0,
+      "underserved_hours": 3,
+      "busiest_line_load_pct": 80,
+      "rebalance": { "moved": 71, "total": 900, "mismatch_after_pct": 0.6 },
+      "add_service": { "added": 45, "window": null, "mismatch_after_pct": 0.6 },
+      "verdict": "RESCHEDULE"
+    }
+  ],
+  "facts": [
+    { "label": "UBC regional visitors with no one-seat ride", "value": "47.6%", "source": "gold_origin_access + GTFS" }
+  ]
+}
+```
+
+- **`verdict`:** `RESCHEDULE` or `INVEST`.
+- **`mismatch_pct`:** the share of departures running at the wrong hour for demand.
+
+## 27. `GET /api/v1/backtest` [NEW]
+
+The model scorecard: proof that the predictions work. It's computed over the replay period using only forecasts issued before each hour.
+
+```json
+{
+  "period": { "start": "2025-11-15", "end": "2026-08-31" },
+  "surge_threshold": 1.25,
+  "method": "Hourly forecasts issued every hour; a surge hour is 'caught' if the forecast issued >= 3 h earlier also exceeded the threshold.",
+  "by_hub": [
+    { "hub_id": "ubc", "actual_surge_hours": 212, "predicted_surge_hours": 230, "precision_pct": 78.3, "recall_pct": 84.9, "median_lead_time_minutes": 240 }
+  ],
+  "by_horizon": [
+    { "horizon_hours": 3, "mape_pct": 9.8, "coverage_80_pct": 81.2 },
+    { "horizon_hours": 6, "mape_pct": 12.4, "coverage_80_pct": 79.5 },
+    { "horizon_hours": 12, "mape_pct": 15.1, "coverage_80_pct": 78.0 },
+    { "horizon_hours": 24, "mape_pct": 17.9, "coverage_80_pct": 76.3 }
+  ]
+}
+```
+
+The numbers above are placeholders. Please return the real ones.
+
+## 28. `GET /api/v1/validation` [NEW]
+
+Shows that the ping data matches reality: the Waterfront weekday ping profile against real TransLink SkyTrain boardings plus alightings (`gold_waterfront_validation`).
+
+```json
+{
+  "hub_id": "waterfront",
+  "r": 0.92,
+  "r_shifted_3h": 0.38,
+  "rows": [ { "hour": 8, "pings_pct": 7.1, "skytrain_pct": 7.6 } ],
+  "source": "TransLink TSPR 2025 SkyTrain station hourly"
+}
+```
+
+---
+
+# Core Frontend Contract [CHANGED]
+
+For the frontend, the core API can effectively be reduced to:
+
+```text
+GET  /meta                               Startup config, presets, thresholds        [NEW]
+GET  /state                              Initial application state (+ after reset)  [CHANGED]
+WS   /ws/simulation                      Everything that changes while running      [CHANGED]
+PUT  /simulation/time | speed | settings Seek, speed, auto-pause                    [NEW/CHANGED]
+POST /simulation/pause | resume          Play controls
+POST /additional-trips/{id}/approve      Human approval                             [NEW]
+POST /additional-trips/{id}/reject       Human rejection                            [NEW]
+GET  /additional-trips/{id}              Detailed view / preview of a dispatch
+GET  /hubs/{id}/forecast                 Actual vs forecast chart                   [NEW]
+GET  /hubs/{id}/origins                  Where people are coming from               [NEW]
+GET  /routes/load                        Need vs spare routes                       [NEW]
+GET  /routes/{id}                        Existing TransLink route/schedule information
+```
+
+The other endpoints feed individual hub-panel tabs (`/timeline`, `/events`, `/hubs/*`, `/findings`, `/backtest`, `/validation`) or are for debugging (`/surges`, `/buses`, `/additional-trips`, `/simulation`).
+
+**Priority if time is short:**
+
+1. `/meta`, `/state` + WebSocket, seek, approve/reject, `/hubs/{id}/forecast` and `/hubs/{id}/origins`.
+2. `/routes/load`, `/timeline`, `/hubs/{id}/hourly-profile`, `/hubs/{id}/late-night`, `/backtest`.
+3. Everything else.
+
+The frontend is built against mocks of this exact contract in the meantime.
+
+---
+
+# Open questions for you [NEW]
+
+1. **Non-hub surges:** the cell data only covers the 3 hubs. What drives surges at other locations, like the Broadway-City Hall example? If none exist in practice, that's fine, and the UI handles an empty list.
+2. **Route load:** do you estimate hour-level load, or use the TSPR 2025 period averages? Please set `load_basis` accordingly.
+3. **Spare fleet:** do the buses come from a depot, from low-load routes, or both? How many are there, and where do they start?
+4. **Events:** who will curate the exam, sports and concert CSV, and where will it live? A Databricks table or a CSV in the repo?
+5. **Forecast model:** which model, trained how? We need `model.name` and the backtest method for the About screen and the pitch.
+6. **Approval timeout:** what `approval_expires_at` rule do you want? Suggestion: the earlier of 30 simulated minutes after the proposal, or the latest time the bus can leave and still arrive before the surge.
+7. **Trip → bus status mapping:** confirm the table in §0.1 or send yours.
+8. **Hosting later:** if we move the frontend to Vercel, the WebSocket server has to be public over `wss://`. Where would you host the backend?

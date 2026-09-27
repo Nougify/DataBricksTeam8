@@ -1,0 +1,53 @@
+[
+  {
+    "type": "bus.position_updated",
+    "simulation_time": "2026-09-26T17:13:20-07:00",
+    "data": {
+      "bus_id": "bus-3",
+      "location": {
+        "lat": 49.258,
+        "lon": -123.121
+      },
+      "status": "DEADHEADING"
+    }
+  },
+  {
+    "type": "surge.detected",
+    "simulation_time": "2026-09-26T17:05:00-07:00",
+    "data": {
+      "surge_id": "surge-123",
+      "location": {
+        "lat": 49.263,
+        "lon": -123.115
+      },
+      "predicted_time": "2026-09-26T17:18:00-07:00"
+    }
+  },
+  {
+    "type": "dispatch.created",
+    "simulation_time": "2026-09-26T17:05:01-07:00",
+    "data": {
+      "trip_id": "trip-456",
+      "surge_id": "surge-123",
+      "bus_id": "bus-3",
+      "route_id": "099",
+      "departure_time": "2026-09-26T17:16:00-07:00"
+    }
+  },
+  {
+    "type": "trip.started",
+    "simulation_time": "2026-09-26T17:16:00-07:00",
+    "data": {
+      "trip_id": "trip-456",
+      "bus_id": "bus-3"
+    }
+  },
+  {
+    "type": "trip.completed",
+    "simulation_time": "2026-09-26T18:04:00-07:00",
+    "data": {
+      "trip_id": "trip-456",
+      "bus_id": "bus-3"
+    }
+  }
+]

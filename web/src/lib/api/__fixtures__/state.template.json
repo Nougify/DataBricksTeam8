@@ -1,0 +1,9 @@
+{
+  "epoch": 3,
+  "last_seq": 1042,
+  "simulation": { "...": "Clock object (§0.1)" },
+  "hubs": [ { "...": "HubStatus (§0.1)" } ],
+  "surges": [ { "...": "Surge (§0.1)" } ],
+  "buses": [ { "...": "Bus (§0.1)" } ],
+  "additional_trips": [ { "...": "AdditionalTrip (§0.1)" } ]
+}

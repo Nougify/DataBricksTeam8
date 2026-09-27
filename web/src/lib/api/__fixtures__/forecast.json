@@ -1,0 +1,25 @@
+{
+  "hub_id": "ubc",
+  "issued_at": "2025-12-06T10:00:00-08:00",
+  "horizon_hours": 6,
+  "surge_threshold": 1.25,
+  "typical_basis": "Mean pings for the same day type and hour over the 8 weeks before issued_at",
+  "model": { "name": "ai_forecast hourly", "trained_through": "2025-12-06T09:00:00-08:00", "granularity": "hour" },
+  "rows": [
+    {
+      "time": "2025-12-06T04:00:00-08:00", "local_date": "2025-12-06", "hour": 4, "kind": "HISTORY",
+      "actual_pings": 410, "forecast_pings": 395, "forecast_issued_at": "2025-12-05T22:00:00-08:00",
+      "lower_80": 330, "upper_80": 460, "typical_pings": 380, "surge_index": 1.08, "is_surge": false
+    },
+    {
+      "time": "2025-12-06T10:00:00-08:00", "local_date": "2025-12-06", "hour": 10, "kind": "CURRENT",
+      "actual_pings": 1210, "hour_complete": false, "forecast_pings": 2400, "forecast_issued_at": "2025-12-06T04:00:00-08:00",
+      "lower_80": 2050, "upper_80": 2760, "typical_pings": 1900, "surge_index": 1.26, "is_surge": true
+    },
+    {
+      "time": "2025-12-06T13:00:00-08:00", "local_date": "2025-12-06", "hour": 13, "kind": "FORECAST",
+      "actual_pings": null, "forecast_pings": 4680, "forecast_issued_at": "2025-12-06T10:00:00-08:00",
+      "lower_80": 4100, "upper_80": 5250, "typical_pings": 2610, "surge_index": 1.79, "is_surge": true
+    }
+  ]
+}

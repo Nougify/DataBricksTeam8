@@ -1,0 +1,7 @@
+{
+  "hub_id": "waterfront",
+  "r": 0.92,
+  "r_shifted_3h": 0.38,
+  "rows": [ { "hour": 8, "pings_pct": 7.1, "skytrain_pct": 7.6 } ],
+  "source": "TransLink TSPR 2025 SkyTrain station hourly"
+}
