@@ -297,6 +297,25 @@ AdditionalTrip = {
 }
 ```
 
+An explicit fleet file has this backend configuration contract:
+
+```text
+FleetConfig = {
+  buses: [{
+    id: string,
+    capacity: positive integer,
+    initial_location_id: canonical hub ID,
+    home_location_id: canonical hub ID
+  }]
+}
+```
+
+The file rejects duplicate IDs, unknown fields, non-integer capacities, and
+location IDs absent from the loaded transit index. An empty bus list is valid.
+When no file is configured, development mode may generate a homogeneous fleet at
+an explicit default hub. Runtime reads expose buses in stable ID order; proposal
+selection starts from available, unlinked buses in that same order.
+
 The backend selects the highest-priority feasible recommendation and sets
 `suggested_extra_buses = ceil(extra_bus_trips_est)` from that recommendation.
 It caps proposals by its configured per-event limit and currently available
@@ -473,7 +492,8 @@ Required configuration groups:
 - Mapping: source hub aliases, source route aliases, destination-to-stop aliases,
   direction aliases, and exact stop-ID/name matching.
 - GTFS: feed path/version and representative service dates.
-- Fleet: buses, capacities, initial locations, and per-event proposal cap.
+- Fleet: optional JSON definition, generated fallback count/capacity/default hub,
+  known initial/home locations, and per-event proposal cap.
 - Routing: provider and fallback speed.
 
 Credentials remain server-side and are never returned by APIs or logs. Production

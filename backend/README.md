@@ -29,6 +29,32 @@ settings use JSON syntax. `APP_ENV` accepts `development`, `test`, or
 External data modes fail startup unless their required connection or snapshot
 settings are supplied; they never fall back to fixture data.
 
+## Fleet configuration
+
+Set `FLEET_CONFIG_PATH` to a JSON file to use an explicit backend-owned fleet.
+Relative paths are resolved from the process working directory. The file is
+authoritative when configured; `FLEET_SIZE`, `DEFAULT_BUS_CAPACITY`, and
+`DEFAULT_FLEET_LOCATION_ID` only control the generated development fleet used
+when no file is set.
+
+```json
+{
+  "buses": [
+    {
+      "id": "bus-01",
+      "capacity": 50,
+      "initial_location_id": "ubc",
+      "home_location_id": "ubc"
+    }
+  ]
+}
+```
+
+Bus IDs must be unique, capacities must be positive integers, and location IDs
+must name hubs in the loaded GTFS-backed transit index. `{ "buses": [] }` is a
+valid empty fleet. `config/fleet.json` is the bundled reproducible example and is
+copied into the backend container.
+
 ## Checks
 
 ```sh

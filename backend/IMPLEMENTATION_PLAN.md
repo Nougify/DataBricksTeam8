@@ -16,8 +16,10 @@ Completed foundations:
 - Fixture, exported-event, and bounded parameterized Databricks source modes with
   atomic event-window replacement and no fallback after source failure.
 - Actionable-time visibility masking in `/state` and dispatch-event reads.
-- Basic source hub and route alias resolution against backend GTFS.
-- Deterministic backend-owned fleet initialization and immutable reset state.
+- Typed source recommendation mapping to deterministic GTFS route, destination,
+  direction, pattern, and service-date candidates.
+- Strict file-backed and generated backend fleets with immutable reset state,
+  deterministic ordering, and actual fleet metadata.
 - Event, bus, trip, and route read endpoints, expanded metadata, epoch-reset seek,
   and atomic idempotent approval/rejection for proposals that already exist.
 
@@ -25,17 +27,15 @@ Partial or superseded implementation still present:
 
 - Event activation is coordinator-owned and deterministic, but proposal creation
   and downstream event status transitions remain for chunk 06.
-- Recommendations now resolve to typed GTFS route, destination, direction,
-  pattern, and service-date candidates; real-data aliases remain for chunk 11.
-- Generated fixture buses work, but `fleet_config_path` is not loaded or validated.
 - Approval and rejection work, but no production service creates, expires, or
   automatically approves proposals.
 - Seek rebuilds event activation but does not replay movement or recorded decisions.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **05 - Backend Fleet Configuration**, followed by
-completion of **06-07** before movement and replay. Do not build additional
-forecast/origin/analytics endpoints against the superseded contract.
+The next implementation step is **07 - Routing And Movement Foundations**,
+followed by **06 - Proposal, Reservation, And Approval** before movement and
+replay. Do not build additional forecast/origin/analytics endpoints against the
+superseded contract.
 
 ### 1.1 Implementation Status
 
@@ -45,7 +45,7 @@ forecast/origin/analytics endpoints against the superseded contract.
 | 02 Filtered event adapters and cache | Mostly complete | Finalize live query details and test real export/Databricks rows |
 | 03 Event repository and activation | Complete | Loaded events activate once through coordinator-owned keyed boundaries |
 | 04 GTFS recommendation mapping | Complete | Typed deterministic route, destination, pattern, direction, and service-date candidates |
-| 05 Backend fleet configuration | Partial | File-backed fleet loading and validation |
+| 05 Backend fleet configuration | Complete | Strict file-backed fleets, generated fallback, metadata, ordering, and reset state |
 | 06 Proposal and approval | Partial | Proposal creation, reservation, expiry, automatic approval, and fleet caps |
 | 07 Routing foundations | Partial | Deadhead, service, and return itinerary composition |
 | 08 Movement lifecycle | Not started | Bus/trip progression, interpolation, completion, and release |
@@ -58,25 +58,23 @@ forecast/origin/analytics endpoints against the superseded contract.
 
 Complete the following in dependency order:
 
-1. Load and validate explicit fleet configuration, including unique IDs, positive
-   capacities, known initial locations, home locations, and empty/custom fleets.
+1. Compose deadhead, service, and return paths and times. Apply proactive lateness
+   policy without rejecting normal reactive post-event arrivals.
 2. Implement event-to-proposal creation: recommendation fallback, bus ranking,
    suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
    rollback, and automatic approval mode.
-3. Compose deadhead, service, and return paths and times. Apply proactive lateness
-   policy without rejecting normal reactive post-event arrivals.
-4. Implement movement boundaries and interpolation through reserved, deadheading,
+3. Implement movement boundaries and interpolation through reserved, deadheading,
    waiting, in-service, returning, completed, and available states.
-5. Make seek rebuild state and replay all canonical boundaries and eligible human
+4. Make seek rebuild state and replay all canonical boundaries and eligible human
    decisions through the target while preserving old state on load/replay failure.
-6. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+5. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-7. Replace the root health-only frontend with clock controls, event/proposal
+6. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-8. Select an explicit Databricks profile and validate the live/exported event
+7. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-9. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+8. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -247,6 +245,12 @@ GTFS candidates or a precise visible failure.
 ### 05 - Backend Fleet Configuration
 
 **Depends on:** 01.
+
+**Status:** Complete. Strict JSON fleet definitions support stable heterogeneous
+bus IDs, positive capacities, canonical initial/home hubs, and empty fleets. A
+generated development fallback uses an explicit default hub. The immutable fleet
+definition drives coordinator reset, metadata, and deterministic available-bus
+ordering without Databricks fleet inputs.
 
 - Keep fleet identity, capacity, initial location, and status entirely in backend
   configuration.

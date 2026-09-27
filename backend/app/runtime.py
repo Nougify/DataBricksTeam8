@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.data.store import EventWindowStore
+from app.fleet import FleetDefinition
 from app.routing import RoutingService
 from app.services.activation import EventActivationService
 from app.services.clock import SimulationClockController
@@ -17,6 +18,7 @@ class RuntimeOwner:
     settings: Settings
     data: EventWindowStore
     transit: TransitIndex
+    fleet: FleetDefinition
     routing: RoutingService
     coordinator: MutationCoordinator
     clock: SimulationClockController

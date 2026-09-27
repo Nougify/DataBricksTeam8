@@ -98,6 +98,7 @@ class Settings(BaseSettings):
 
     fleet_size: Annotated[int, Field(ge=0)] = 3
     default_bus_capacity: PositiveInt = 50
+    default_fleet_location_id: NonEmptyString = "ubc"
     fleet_config_path: Path | None = None
     max_buses_per_event: PositiveInt = 3
     hub_aliases: dict[str, str] = Field(default_factory=lambda: {"UBC": "ubc"})

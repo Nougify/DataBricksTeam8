@@ -67,9 +67,9 @@ class TransitIndex:
         self._exceptions = exceptions
         self._representative_dates = MappingProxyType(dict(representative_dates))
         self._hubs = tuple(sorted(hubs, key=lambda item: item.hub_id))
-        hub_ids = [str(hub.hub_id) for hub in self._hubs]
-        if len(hub_ids) != len(set(hub_ids)):
-            raise TransitDataError("duplicate hub id")
+        self._hub_by_id: Mapping[str, HubCatchment] = self._unique_map(
+            ((str(hub.hub_id), hub) for hub in self._hubs), "hub"
+        )
 
         self._route_by_id: Mapping[str, RouteRef] = self._unique_map(
             ((str(route.route_id), route) for route in self._routes), "route"
@@ -206,6 +206,9 @@ class TransitIndex:
 
     def hubs(self) -> tuple[HubCatchment, ...]:
         return self._hubs
+
+    def hub(self, hub_id: HubId) -> HubCatchment | None:
+        return self._hub_by_id.get(str(hub_id))
 
     def hub_stop_ids(self, hub_id: HubId) -> tuple[StopId, ...]:
         if str(hub_id) not in self._hub_stops:

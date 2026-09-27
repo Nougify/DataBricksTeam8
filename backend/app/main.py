@@ -15,9 +15,6 @@ from app.domain.events import EventType, PendingEvent
 from app.domain.models import (
     AdditionalTrip,
     AdditionalTripStatus,
-    Bus,
-    BusSource,
-    BusSourceType,
     BusStatus,
     DispatchEvent,
     EventStatus,
@@ -30,6 +27,7 @@ from app.domain.types import (
     RouteId,
 )
 from app.errors import install_error_handlers
+from app.fleet import load_fleet
 from app.repositories.memory import StateEditor, entities_from
 from app.routing import build_routing_service
 from app.runtime import RuntimeOwner
@@ -112,25 +110,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         )
         events = InMemoryEventSink()
-        first_hub = transit.hubs()[0]
-        fleet = tuple(
-            Bus(
-                id=f"bus-{number:02d}",
-                status=BusStatus.AVAILABLE,
-                location=first_hub.location,
-                heading_deg=None,
-                capacity=resolved_settings.default_bus_capacity,
-                source=BusSource(
-                    type=BusSourceType.DEPOT,
-                    route=None,
-                    depot_name=first_hub.location_name,
-                ),
-                assigned_trip_id=None,
-                proposed_trip_id=None,
-                home_location=first_hub.location,
-            )
-            for number in range(1, resolved_settings.fleet_size + 1)
-        )
+        fleet = load_fleet(resolved_settings, transit)
         metadata = data.reader().window.metadata
         coordinator = MutationCoordinator(
             events,
@@ -140,7 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 coverage_end=metadata.window_end,
             ),
             entities_from(
-                buses=fleet,
+                buses=fleet.buses,
             ),
         )
         clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
@@ -154,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings=resolved_settings,
             data=data,
             transit=transit,
+            fleet=fleet,
             routing=routing,
             coordinator=coordinator,
             clock=clock,
@@ -205,9 +186,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "supported_speeds": [1, 60, 300, 900, 3600],
             "gtfs_version": runtime.transit.feed_version,
             "fleet": {
-                "size": runtime.settings.fleet_size,
-                "total_capacity": runtime.settings.fleet_size
-                * runtime.settings.default_bus_capacity,
+                "size": runtime.fleet.size,
+                "total_capacity": runtime.fleet.total_capacity,
+                "source": runtime.fleet.source,
                 "max_buses_per_event": runtime.settings.max_buses_per_event,
             },
             "approval_mode": runtime.settings.approval_mode,
