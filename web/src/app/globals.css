@@ -1,0 +1,274 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens. The rationale, contrast measurements and usage rules live in web/DESIGN.md.
+ * Light values sit in :root, dark values in .dark (next-themes, attribute="class").
+ * Components read colours only through these tokens: Tailwind utilities (bg-surge-high,
+ * text-need, border-spare ...) or, for ECharts/MapLibre, useThemeTokens() from @/lib/theme/tokens.
+ * Keep the hex values in sync with the fallbacks in src/lib/theme/tokens.ts.
+ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Semantic roles (spec 14.2). Marks only: text stays in foreground / muted-foreground. */
+  --color-surge-low: var(--surge-low);
+  --color-surge-medium: var(--surge-medium);
+  --color-surge-high: var(--surge-high);
+  --color-need: var(--need);
+  --color-spare: var(--spare);
+  --color-late-night: var(--late-night);
+  --color-actual: var(--actual);
+  --color-forecast: var(--forecast);
+  --color-typical: var(--typical);
+  --color-access-transfer: var(--access-transfer);
+  --color-access-oneseat: var(--access-oneseat);
+  --color-trip-proposed: var(--trip-proposed);
+  --color-trip-active: var(--trip-active);
+  --color-trip-done: var(--trip-done);
+  --color-trip-failed: var(--trip-failed);
+  --color-map-land: var(--map-land);
+  --color-map-water: var(--map-water);
+  --color-map-label: var(--map-label);
+
+  /* Radius hierarchy (DESIGN.md "Radius"): sm = plates, lg = controls, xl = floating containers. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* The one elevation: only for things that float over the map (shadow-float). */
+  --shadow-float: var(--elevation-float);
+}
+
+@theme {
+  /* The hub halo ripple: the only ambient motion in the app. Two staggered rings. */
+  --animate-halo: halo-ripple 3.2s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+  --animate-halo-late: halo-ripple 3.2s cubic-bezier(0.22, 0.61, 0.36, 1) 1.6s infinite;
+
+  @keyframes halo-ripple {
+    0% {
+      transform: scale(0.18);
+      opacity: 0;
+    }
+    12% {
+      opacity: var(--halo-ripple-opacity, 0.7);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 0;
+    }
+  }
+}
+
+/* Light: "Overcast inlet". */
+:root {
+  --radius: 0.375rem;
+
+  --background: #ecf3f2; /* Sea fog */
+  --foreground: #0b2b33; /* Spruce */
+  --card: #fafdfd; /* Timetable paper */
+  --card-foreground: #0b2b33;
+  --popover: #fafdfd;
+  --popover-foreground: #0b2b33;
+  --primary: #0b2b33;
+  --primary-foreground: #fafdfd;
+  --secondary: #e1eaea;
+  --secondary-foreground: #0b2b33;
+  --muted: #e1eaea;
+  --muted-foreground: #4f666d; /* Slate */
+  --accent: #dde8e8;
+  --accent-foreground: #0b2b33;
+  --destructive: #930223;
+  --border: #cdd8d9;
+  --input: #728489;
+  --ring: #195fb3; /* Harbour */
+
+  --surge-low: #af820b;
+  --surge-medium: #a9650b; /* Sodium */
+  --surge-high: #9d4203;
+  --need: #930223;
+  --spare: #2c9a88;
+  --late-night: #582684;
+  --actual: #0b2b33;
+  --forecast: #195fb3;
+  --typical: #656e71;
+  --access-transfer: #7b0159;
+  --access-oneseat: #56717b;
+  --trip-proposed: #40258c;
+  --trip-active: #035e9d;
+  --trip-done: #60706f;
+  --trip-failed: #6c342e;
+  --map-land: #f3f7f6;
+  --map-water: #c9d8dc;
+  --map-label: #3f555c;
+
+  --chart-1: var(--actual);
+  --chart-2: var(--forecast);
+  --chart-3: var(--typical);
+  --chart-4: var(--spare);
+  --chart-5: var(--need);
+
+  --sidebar: #fafdfd;
+  --sidebar-foreground: #0b2b33;
+  --sidebar-primary: #0b2b33;
+  --sidebar-primary-foreground: #fafdfd;
+  --sidebar-accent: #dde8e8;
+  --sidebar-accent-foreground: #0b2b33;
+  --sidebar-border: #cdd8d9;
+  --sidebar-ring: #195fb3;
+
+  --elevation-float: 0 1px 2px rgb(11 43 51 / 0.08), 0 8px 24px -8px rgb(11 43 51 / 0.22);
+}
+
+/* Dark: "Harbour at night". */
+.dark {
+  --background: #0a171b; /* Night inlet */
+  --foreground: #e6efef; /* Rain */
+  --card: #122126; /* Wet asphalt */
+  --card-foreground: #e6efef;
+  --popover: #122126;
+  --popover-foreground: #e6efef;
+  --primary: #e6efef;
+  --primary-foreground: #0a171b;
+  --secondary: #18292f;
+  --secondary-foreground: #e6efef;
+  --muted: #18292f;
+  --muted-foreground: #8aa0a4; /* Drizzle */
+  --accent: #1d3037;
+  --accent-foreground: #e6efef;
+  --destructive: #ea6067;
+  --border: #2d3b3f;
+  --input: #62767c;
+  --ring: #659fe4; /* Harbour */
+
+  --surge-low: #face5b;
+  --surge-medium: #f8a53d; /* Sodium */
+  --surge-high: #f1803e;
+  --need: #ea6067;
+  --spare: #88edda;
+  --late-night: #cea9fb;
+  --actual: #e6efef;
+  --forecast: #659fe4;
+  --typical: #838c8f;
+  --access-transfer: #ff8ebc;
+  --access-oneseat: #778f97;
+  --trip-proposed: #ab9ef2;
+  --trip-active: #3c8bd0;
+  --trip-done: #7c8e8c;
+  --trip-failed: #d49b92;
+  --map-land: #0d1619;
+  --map-water: #1a2c33;
+  --map-label: #a9bcc0;
+
+  --chart-1: var(--actual);
+  --chart-2: var(--forecast);
+  --chart-3: var(--typical);
+  --chart-4: var(--spare);
+  --chart-5: var(--need);
+
+  --sidebar: #122126;
+  --sidebar-foreground: #e6efef;
+  --sidebar-primary: #e6efef;
+  --sidebar-primary-foreground: #0a171b;
+  --sidebar-accent: #1d3037;
+  --sidebar-accent-foreground: #e6efef;
+  --sidebar-border: #2d3b3f;
+  --sidebar-ring: #659fe4;
+
+  --elevation-float: 0 0 0 1px rgb(0 0 0 / 0.35), 0 10px 28px -6px rgb(0 0 0 / 0.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Every number lines up: clocks, countdowns, KPIs, tables, SVG chart labels. */
+    font-variant-numeric: tabular-nums lining-nums;
+    text-rendering: optimizeLegibility;
+  }
+  /* Visible focus for everything that doesn't bring its own ring (map markers, custom rows). */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Map text (hub names, origin labels) keeps a land-coloured halo so it reads over any overlay. */
+@utility map-text-halo {
+  text-shadow:
+    0 0 2px var(--map-land),
+    0 0 2px var(--map-land),
+    0 0 4px var(--map-land);
+}
+
+/* Unlayered on purpose so it beats the animate-pulse utility: skeletons are static. */
+[data-slot="skeleton"] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No halo ripple: the static halo (size + colour) still carries the surge index. */
+  .animate-halo,
+  .animate-halo-late {
+    animation: none;
+    opacity: 0;
+  }
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

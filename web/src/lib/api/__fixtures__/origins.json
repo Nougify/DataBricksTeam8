@@ -1,0 +1,34 @@
+{
+  "hub_id": "ubc",
+  "basis": "actual",
+  "window": { "start": "2025-12-06T12:00:00-08:00", "end": "2025-12-06T13:00:00-08:00" },
+  "day_type": "sat",
+  "total_pings": 3920,
+  "low_sample": false,
+  "origins": [
+    {
+      "origin": "Surrey",
+      "region": "Metro Vancouver",
+      "location": { "lat": 49.1897, "lon": -122.848 },
+      "pings": 568,
+      "share_pct": 14.5,
+      "share_of_local_pct": 17.2,
+      "avg_dwell_min": 95.3,
+      "access_type": "TRANSFER_REQUIRED",
+      "direct_lines": [],
+      "n_direct_lines": 0
+    },
+    {
+      "origin": "Ontario",
+      "region": "Out of province",
+      "location": null,
+      "pings": 41,
+      "share_pct": 1.0,
+      "share_of_local_pct": null,
+      "avg_dwell_min": 180.2,
+      "access_type": "VISITOR",
+      "direct_lines": [],
+      "n_direct_lines": 0
+    }
+  ]
+}

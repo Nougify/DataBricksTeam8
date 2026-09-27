@@ -1,0 +1,22 @@
+{
+  "buses": [
+    {
+      "id": "bus-01",
+      "capacity": 50,
+      "initial_location_id": "ubc",
+      "home_location_id": "ubc"
+    },
+    {
+      "id": "bus-02",
+      "capacity": 50,
+      "initial_location_id": "ubc",
+      "home_location_id": "ubc"
+    },
+    {
+      "id": "bus-03",
+      "capacity": 50,
+      "initial_location_id": "waterfront",
+      "home_location_id": "ubc"
+    }
+  ]
+}

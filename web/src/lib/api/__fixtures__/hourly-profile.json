@@ -1,0 +1,20 @@
+{
+  "hub_id": "ubc",
+  "day_type": "mf",
+  "season_label": "Fall (pings Sep-May) vs fall 2026 GTFS timetable",
+  "rows": [
+    {
+      "hour": 13,
+      "avg_pings": 2819.5,
+      "departures": 112,
+      "bus_departures": 112,
+      "skytrain_departures": 0,
+      "seabus_departures": 0,
+      "lines_running": 10,
+      "status": "UNDERSERVED",
+      "time_period": "09-15 Midday",
+      "peak_load_pct": 78.9,
+      "most_crowded_line": "99 WEST"
+    }
+  ]
+}

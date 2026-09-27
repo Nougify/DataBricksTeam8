@@ -1,0 +1,13 @@
+{
+  "...": "all AdditionalTrip fields (§0.1)",
+  "bus": {
+    "id": "bus-3",
+    "current_location": { "lat": 49.258, "lon": -123.121 }
+  },
+  "surge": { "...": "Surge (§0.1)" },
+  "progress": {
+    "percent_complete": 0.18,
+    "current_stop_id": "stop-123",
+    "next_stop_id": "stop-456"
+  }
+}

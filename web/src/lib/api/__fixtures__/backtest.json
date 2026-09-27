@@ -1,0 +1,14 @@
+{
+  "period": { "start": "2025-11-15", "end": "2026-08-31" },
+  "surge_threshold": 1.25,
+  "method": "Hourly forecasts issued every hour; a surge hour is 'caught' if the forecast issued >= 3 h earlier also exceeded the threshold.",
+  "by_hub": [
+    { "hub_id": "ubc", "actual_surge_hours": 212, "predicted_surge_hours": 230, "precision_pct": 78.3, "recall_pct": 84.9, "median_lead_time_minutes": 240 }
+  ],
+  "by_horizon": [
+    { "horizon_hours": 3, "mape_pct": 9.8, "coverage_80_pct": 81.2 },
+    { "horizon_hours": 6, "mape_pct": 12.4, "coverage_80_pct": 79.5 },
+    { "horizon_hours": 12, "mape_pct": 15.1, "coverage_80_pct": 78.0 },
+    { "horizon_hours": 24, "mape_pct": 17.9, "coverage_80_pct": 76.3 }
+  ]
+}
