@@ -34,7 +34,7 @@ class AppEnvironment(StrEnum):
 
 class DataMode(StrEnum):
     DATABRICKS = "databricks"
-    EXPORTED_SNAPSHOT = "exported_snapshot"
+    EXPORTED_EVENTS = "exported_events"
     FIXTURE = "fixture"
 
 
@@ -72,30 +72,25 @@ class Settings(BaseSettings):
     approval_timeout_minutes: PositiveInt = 30
 
     data_mode: DataMode = DataMode.FIXTURE
-    data_snapshot_version: NonEmptyString = "development-fixture-v1"
-    forecast_model_version: NonEmptyString = "development-fixture-v1"
+    data_source_version: NonEmptyString = "development-fixture-v1"
     gtfs_feed_version: NonEmptyString = "fall-2026"
-    exported_snapshot_path: Path | None = None
+    exported_events_path: Path | None = None
     databricks_host: AnyHttpUrl | None = None
     databricks_http_path: NonEmptyString | None = None
     databricks_token: SecretStr | None = None
     data_catalog: NonEmptyString | None = None
     data_schema: NonEmptyString | None = None
+    dispatch_events_table: NonEmptyString | None = "dispatch_events"
+    event_window_start: Annotated[datetime, AwareDatetime] = datetime.fromisoformat(
+        "2026-07-10T09:00:00-07:00"
+    )
+    event_window_end: Annotated[datetime, AwareDatetime] = datetime.fromisoformat(
+        "2026-07-10T15:00:00-07:00"
+    )
 
     fleet_size: Annotated[int, Field(ge=0)] = 3
     default_bus_capacity: PositiveInt = 50
     fleet_config_path: Path | None = None
-
-    dispatch_lookahead_minutes: PositiveInt = 120
-    max_proposals_per_surge: PositiveInt = 2
-    origin_stop_radius_meters: PositiveFloat = 500
-    destination_stop_radius_meters: PositiveFloat = 1500
-    min_schedule_separation_seconds: PositiveInt = 900
-    max_surge_departure_deviation_seconds: PositiveInt = 3600
-    route_score_origin_proximity_weight: UnitWeight = 0.30
-    route_score_destination_coverage_weight: UnitWeight = 0.30
-    route_score_schedule_gap_weight: UnitWeight = 0.25
-    route_score_deadhead_time_weight: UnitWeight = 0.15
 
     routing_provider: RoutingProvider = RoutingProvider.STRAIGHT_LINE
     routing_speed_kph: PositiveFloat = 30
@@ -156,22 +151,13 @@ class Settings(BaseSettings):
                     f"representative date for {day_type.value} has wrong weekday"
                 )
 
-        score_weight_total = (
-            self.route_score_origin_proximity_weight
-            + self.route_score_destination_coverage_weight
-            + self.route_score_schedule_gap_weight
-            + self.route_score_deadhead_time_weight
-        )
-        if abs(score_weight_total - 1.0) > 1e-9:
-            raise ValueError("route scoring weights must sum to 1")
-
+        if self.event_window_end <= self.event_window_start:
+            raise ValueError("event_window_end must be after event_window_start")
         if (
-            self.data_mode is DataMode.EXPORTED_SNAPSHOT
-            and self.exported_snapshot_path is None
+            self.data_mode is DataMode.EXPORTED_EVENTS
+            and self.exported_events_path is None
         ):
-            raise ValueError(
-                "exported_snapshot_path is required in exported_snapshot mode"
-            )
+            raise ValueError("exported_events_path is required in exported_events mode")
 
         if self.data_mode is DataMode.DATABRICKS:
             required_databricks_values = (
@@ -180,6 +166,7 @@ class Settings(BaseSettings):
                 self.databricks_token,
                 self.data_catalog,
                 self.data_schema,
+                self.dispatch_events_table,
             )
             if any(value is None for value in required_databricks_values):
                 raise ValueError(

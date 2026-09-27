@@ -1,266 +1,181 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Annotated, Any, Self
+from datetime import datetime
+from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from app.config import DataMode
-from app.domain.models import DomainModel, ForecastBucket, ForecastVintage, GeoPoint
-from app.domain.types import (
-    LoadPercentage,
-    NonEmptyHubId,
-    NonEmptyRouteId,
-    NonEmptyText,
-    NonNegativeFloat,
-    NonNegativeInt,
-    Percentage,
-    VancouverDateTime,
-)
+from app.domain.models import DomainModel
+from app.domain.types import NonEmptyText, NonNegativeFloat, VancouverDateTime
 
 
-class SnapshotMetadata(DomainModel):
-    source_mode: DataMode
+class DispatchEventRow(DomainModel):
+    event_id: NonEmptyText
+    recommendation_id: NonEmptyText
     source_version: NonEmptyText
-    model_version: NonEmptyText
+    event_time: VancouverDateTime
+    hub_id: NonEmptyText
+    surge_type: NonEmptyText
+    predicted_people: NonNegativeFloat
+    normal_people: NonNegativeFloat
+    destination: NonEmptyText
+    destination_share_pct: float = Field(ge=0, le=100)
+    route_key: NonEmptyText
+    extra_bus_trips_est: NonNegativeFloat
+    priority_score: float
     generated_at: VancouverDateTime
-    fresh_through: VancouverDateTime
-    coverage_start: VancouverDateTime
-    coverage_end: VancouverDateTime
-    provenance: NonEmptyText
+
+    @field_validator("event_time", "generated_at", mode="before")
+    @classmethod
+    def require_aware_vancouver_instant(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            raise ValueError("timestamps must include an offset")
+        return value
+
+
+class EventRecommendation(DomainModel):
+    recommendation_id: NonEmptyText
+    destination: NonEmptyText
+    destination_share_pct: float = Field(ge=0, le=100)
+    route_key: NonEmptyText
+    extra_bus_trips_est: NonNegativeFloat
+    priority_score: float
+
+
+class DispatchEvent(DomainModel):
+    event_id: NonEmptyText
+    source_version: NonEmptyText
+    event_time: VancouverDateTime
+    hub_id: NonEmptyText
+    surge_type: NonEmptyText
+    predicted_people: NonNegativeFloat
+    normal_people: NonNegativeFloat
+    generated_at: VancouverDateTime
+    recommendations: tuple[EventRecommendation, ...] = Field(min_length=1)
+    invalid_source_reason: str | None = None
 
     @model_validator(mode="after")
-    def valid_periods(self) -> Self:
-        if self.coverage_end <= self.coverage_start:
-            raise ValueError("coverage_end must be after coverage_start")
-        if self.fresh_through < self.generated_at:
-            raise ValueError("fresh_through must not precede generated_at")
+    def ordered_recommendations(self) -> Self:
+        expected = tuple(
+            sorted(
+                self.recommendations,
+                key=lambda row: (-row.priority_score, row.recommendation_id),
+            )
+        )
+        if self.recommendations != expected:
+            raise ValueError("recommendations must be ordered by priority")
         return self
 
 
-class ActualDemand(DomainModel):
-    hub_id: NonEmptyHubId
-    hour: VancouverDateTime
-    pings: NonNegativeInt
-    available_at: VancouverDateTime
-    source_granularity: NonEmptyText = "hour"
+class EventWindowMetadata(DomainModel):
+    source_version: NonEmptyText
+    window_start: VancouverDateTime
+    window_end: VancouverDateTime
+    loaded_at: VancouverDateTime
 
     @model_validator(mode="after")
-    def valid_hour(self) -> Self:
-        _require_hour(self.hour, "actual hour")
-        if self.available_at < self.hour:
-            raise ValueError("actual cannot be available before its hour")
+    def valid_window(self) -> Self:
+        if self.window_end <= self.window_start:
+            raise ValueError("window_end must be after window_start")
         return self
 
 
-class Baseline(DomainModel):
-    hub_id: NonEmptyHubId
-    target_hour: VancouverDateTime
-    issued_at: VancouverDateTime
-    typical_pings: NonNegativeFloat | None
-    sample_count: NonNegativeInt
-    lookback_start: VancouverDateTime | None
-    lookback_end: VancouverDateTime | None
-    basis: NonEmptyText
+class EventWindow(DomainModel):
+    metadata: EventWindowMetadata
+    events: tuple[DispatchEvent, ...]
 
     @model_validator(mode="after")
-    def valid_baseline(self) -> Self:
-        _require_hour(self.target_hour, "baseline target_hour")
-        if self.sample_count == 0:
-            if self.typical_pings is not None:
-                raise ValueError(
-                    "baseline without samples must have null typical_pings"
-                )
-            if self.lookback_start is not None or self.lookback_end is not None:
-                raise ValueError(
-                    "baseline without samples must have no lookback period"
-                )
-        elif (
-            self.typical_pings is None
-            or self.lookback_start is None
-            or self.lookback_end is None
-        ):
-            raise ValueError("sampled baseline requires value and lookback period")
-        elif not self.lookback_start <= self.lookback_end < self.issued_at:
-            raise ValueError("baseline lookback must be ordered and before issuance")
-        return self
-
-
-class OriginDemand(DomainModel):
-    hub_id: NonEmptyHubId
-    hour: VancouverDateTime
-    origin_id: NonEmptyText
-    pings: NonNegativeFloat
-    share_pct: Percentage
-    available_at: VancouverDateTime
-
-    @model_validator(mode="after")
-    def valid_hour(self) -> Self:
-        _require_hour(self.hour, "origin hour")
-        if self.available_at < self.hour:
-            raise ValueError("origin data cannot be available before its hour")
-        return self
-
-
-class HubDimension(DomainModel):
-    hub_id: NonEmptyHubId
-    name: NonEmptyText
-    location: GeoPoint
-    catchment: NonEmptyText
-
-
-class OriginDimension(DomainModel):
-    origin_id: NonEmptyText
-    name: NonEmptyText
-    centroid: GeoPoint | None
-
-
-class RouteLoad(DomainModel):
-    hub_id: NonEmptyHubId
-    route_id: NonEmptyRouteId
-    day_type: NonEmptyText
-    hour: Annotated[int, Field(ge=0, le=23)]
-    load_pct: LoadPercentage
-    observed_period: NonEmptyText
-    load_basis: NonEmptyText
-
-
-class AnalyticalRecord(DomainModel):
-    view: NonEmptyText
-    key: NonEmptyText
-    period_start: date
-    period_end: date
-    source_label: NonEmptyText
-    values: dict[str, Any]
-
-    @model_validator(mode="after")
-    def ordered_period(self) -> Self:
-        if self.period_end < self.period_start:
-            raise ValueError("analytical period_end must not precede period_start")
-        return self
-
-
-class EvaluationArtifact(DomainModel):
-    name: NonEmptyText
-    method: NonEmptyText
-    input_version: NonEmptyText
-    model_version: NonEmptyText
-    period_start: date
-    period_end: date
-    metrics: dict[str, float | int | None]
-
-    @model_validator(mode="after")
-    def ordered_period(self) -> Self:
-        if self.period_end < self.period_start:
-            raise ValueError("evaluation period_end must not precede period_start")
-        return self
-
-
-class DataSnapshot(DomainModel):
-    metadata: SnapshotMetadata
-    forecast_vintages: tuple[ForecastVintage, ...]
-    forecast_buckets: tuple[ForecastBucket, ...]
-    actuals: tuple[ActualDemand, ...]
-    baselines: tuple[Baseline, ...]
-    origins: tuple[OriginDemand, ...]
-    hubs: tuple[HubDimension, ...]
-    origin_dimensions: tuple[OriginDimension, ...]
-    route_loads: tuple[RouteLoad, ...]
-    analytical_records: tuple[AnalyticalRecord, ...]
-    evaluations: tuple[EvaluationArtifact, ...]
-
-    @model_validator(mode="after")
-    def validate_contract(self) -> Self:
-        _require_unique(
-            (vintage.id for vintage in self.forecast_vintages), "vintage id"
-        )
-        _require_unique((bucket.id for bucket in self.forecast_buckets), "bucket id")
-        _require_unique(
-            (
-                (bucket.hub_id, bucket.vintage_id, bucket.target_hour)
-                for bucket in self.forecast_buckets
-            ),
-            "forecast vintage key",
-        )
-        _require_unique(((row.hub_id, row.hour) for row in self.actuals), "actual key")
-        _require_unique(
-            ((row.hub_id, row.target_hour, row.issued_at) for row in self.baselines),
-            "baseline key",
-        )
-        _require_unique(
-            ((row.hub_id, row.hour, row.origin_id) for row in self.origins),
-            "origin key",
-        )
-        _require_unique((row.hub_id for row in self.hubs), "hub id")
-        _require_unique(
-            (row.origin_id for row in self.origin_dimensions), "origin dimension id"
-        )
-        _require_unique(
-            (
-                (row.hub_id, row.route_id, row.day_type, row.hour)
-                for row in self.route_loads
-            ),
-            "route load key",
-        )
-        _require_unique(
-            ((row.view, row.key) for row in self.analytical_records),
-            "analytical key",
-        )
-        _require_unique((row.name for row in self.evaluations), "evaluation name")
-
-        vintages = {vintage.id: vintage for vintage in self.forecast_vintages}
-        hubs = {hub.hub_id for hub in self.hubs}
-        origins = {origin.origin_id for origin in self.origin_dimensions}
-        for bucket in self.forecast_buckets:
-            _require_hour(bucket.target_hour, "forecast target_hour")
-            vintage = vintages.get(bucket.vintage_id)
-            if vintage is None:
-                raise ValueError(f"unknown forecast vintage: {bucket.vintage_id}")
-            elapsed_hours = (
-                bucket.target_hour - vintage.issued_at
-            ).total_seconds() / 3600
-            if elapsed_hours < 0 or abs(bucket.lead_h - elapsed_hours) > 1e-9:
-                raise ValueError(
-                    "forecast lead_h must equal elapsed hours from issuance"
-                )
-            if bucket.hub_id not in hubs:
-                raise ValueError(f"unknown forecast hub: {bucket.hub_id}")
-        if any(row.hub_id not in hubs for row in self.actuals):
-            raise ValueError("actual references unknown hub")
-        if any(row.hub_id not in hubs for row in self.baselines):
-            raise ValueError("baseline references unknown hub")
+    def valid_events(self) -> Self:
+        ids = [event.event_id for event in self.events]
+        if len(ids) != len(set(ids)):
+            raise ValueError("duplicate event_id")
         if any(
-            row.hub_id not in hubs or row.origin_id not in origins
-            for row in self.origins
+            event.source_version != self.metadata.source_version
+            or not self.metadata.window_start
+            <= event.event_time
+            < self.metadata.window_end
+            for event in self.events
         ):
-            raise ValueError("origin demand references unknown dimension")
-        if any(row.hub_id not in hubs for row in self.route_loads):
-            raise ValueError("route load references unknown hub")
-
-        timestamps = [
-            *(row.hour for row in self.actuals),
-            *(row.target_hour for row in self.baselines),
-            *(row.hour for row in self.origins),
-            *(row.target_hour for row in self.forecast_buckets),
-        ]
-        if not hubs or not timestamps:
-            raise ValueError("snapshot has no usable operational coverage")
-        if (
-            min(timestamps) < self.metadata.coverage_start
-            or max(timestamps) > self.metadata.coverage_end
-        ):
-            raise ValueError("data lies outside declared coverage")
+            raise ValueError("event is outside window or has wrong source version")
         return self
 
 
-def _require_hour(value: Any, label: str) -> None:
-    if value.minute or value.second or value.microsecond:
-        raise ValueError(f"{label} must be aligned to an hour")
+def group_event_rows(
+    rows: list[DispatchEventRow], start: datetime, end: datetime
+) -> EventWindow:
+    if end <= start:
+        raise ValueError("window end must be after start")
+    source_versions = {row.source_version for row in rows}
+    if len(source_versions) > 1:
+        raise ValueError("window rows must have one source_version")
+    source_version = next(iter(source_versions), "empty")
+    groups: dict[str, list[DispatchEventRow]] = {}
+    for row in rows:
+        if not start <= row.event_time < end:
+            raise ValueError(f"event {row.event_id} is outside requested window")
+        groups.setdefault(row.event_id, []).append(row)
 
-
-def _require_unique(values: Any, label: str) -> None:
-    seen: set[Any] = set()
-    for value in values:
-        if value in seen:
-            raise ValueError(f"duplicate {label}: {value}")
-        seen.add(value)
+    events: list[DispatchEvent] = []
+    fields = (
+        "source_version",
+        "event_time",
+        "hub_id",
+        "surge_type",
+        "predicted_people",
+        "normal_people",
+        "generated_at",
+    )
+    for event_id, group in groups.items():
+        first = group[0]
+        if any(
+            any(getattr(row, field) != getattr(first, field) for field in fields)
+            for row in group[1:]
+        ):
+            raise ValueError(f"event-level fields conflict for {event_id}")
+        recommendations: dict[str, EventRecommendation] = {}
+        for row in group:
+            recommendation = EventRecommendation(
+                recommendation_id=row.recommendation_id,
+                destination=row.destination,
+                destination_share_pct=row.destination_share_pct,
+                route_key=row.route_key,
+                extra_bus_trips_est=row.extra_bus_trips_est,
+                priority_score=row.priority_score,
+            )
+            existing = recommendations.get(row.recommendation_id)
+            if existing is not None and existing != recommendation:
+                raise ValueError(
+                    f"conflicting duplicate recommendation_id: {row.recommendation_id}"
+                )
+            recommendations[row.recommendation_id] = recommendation
+        events.append(
+            DispatchEvent(
+                event_id=event_id,
+                source_version=first.source_version,
+                event_time=first.event_time,
+                hub_id=first.hub_id,
+                surge_type=first.surge_type,
+                predicted_people=first.predicted_people,
+                normal_people=first.normal_people,
+                generated_at=first.generated_at,
+                recommendations=tuple(
+                    sorted(
+                        recommendations.values(),
+                        key=lambda row: (-row.priority_score, row.recommendation_id),
+                    )
+                ),
+            )
+        )
+    return EventWindow(
+        metadata=EventWindowMetadata(
+            source_version=source_version,
+            window_start=start,
+            window_end=end,
+            loaded_at=datetime.now(start.tzinfo),
+        ),
+        events=tuple(
+            sorted(events, key=lambda event: (event.event_time, event.event_id))
+        ),
+    )

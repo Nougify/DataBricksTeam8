@@ -60,8 +60,8 @@ def test_settings_reject_origin_with_path() -> None:
 
 
 def test_settings_require_export_path_for_export_mode() -> None:
-    with pytest.raises(ValidationError, match="exported_snapshot_path"):
-        Settings(data_mode=DataMode.EXPORTED_SNAPSHOT)
+    with pytest.raises(ValidationError, match="exported_events_path"):
+        Settings(data_mode=DataMode.EXPORTED_EVENTS)
 
 
 def test_settings_require_databricks_connection_for_databricks_mode() -> None:
@@ -69,9 +69,9 @@ def test_settings_require_databricks_connection_for_databricks_mode() -> None:
         Settings(data_mode=DataMode.DATABRICKS)
 
 
-def test_settings_reject_invalid_route_weight_total() -> None:
-    with pytest.raises(ValidationError, match="weights must sum to 1"):
-        Settings(route_score_deadhead_time_weight=0.5)
+def test_settings_reject_invalid_event_window() -> None:
+    with pytest.raises(ValidationError, match="event_window_end"):
+        Settings(event_window_end="2026-07-10T08:00:00-07:00")
 
 
 def test_settings_validate_representative_service_dates() -> None:

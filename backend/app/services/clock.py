@@ -222,6 +222,18 @@ class SimulationClockController:
             self._anchor = self._time_source.now()
             return updated
 
+    def seek(self, at: VancouverDateTime) -> SimulationClock:
+        with self._lock:
+            clock = self.clock
+            if not clock.min_time <= at <= clock.max_time:
+                raise ValueError("seek time must be within simulation bounds")
+            updated = _clock_at(clock, at, status=ClockStatus.PAUSED)
+            self._commit_clock(
+                updated, (_state_event(updated, StateChangeReason.PAUSED),)
+            )
+            self._anchor = self._time_source.now()
+            return updated
+
     def set_auto_pause_on_proposal(self, enabled: bool) -> SimulationClock:
         with self._lock:
             self.pump()
