@@ -1,11 +1,19 @@
 import json
+import math
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from app.domain.models import DomainModel, ServicePattern, TransitMode
+from app.domain.models import (
+    DomainModel,
+    ScheduledStopTime,
+    ServicePattern,
+    TransitMode,
+)
 from app.domain.types import HubId, NonEmptyText, RouteId, ServicePatternId
 from app.transit.index import TransitDataError, TransitIndex
+
+MIN_DISPATCH_PATH_DISTANCE_M = 1_000
 
 
 class DispatchPathMapping(DomainModel):
@@ -57,6 +65,10 @@ def generate_recommendation_mappings(
             if source is None:
                 continue
             destination = pattern.stops[destination_index]
+            if destination.stop.id in hub_stops or not dispatch_path_leaves_source(
+                source, destination
+            ):
+                continue
             mapping = DispatchPathMapping(
                 hub_id=hub_id,
                 route_key=route_key,
@@ -151,6 +163,20 @@ def load_recommendation_mappings(
                 "recommendation mapping destination is not downstream: "
                 f"{mapping.pattern_id}"
             )
+        if mapping.destination_stop_id in {
+            str(stop_id) for stop_id in transit.hub_stop_ids(HubId(mapping.hub_id))
+        }:
+            raise TransitDataError(
+                "recommendation mapping destination remains inside source hub: "
+                f"{mapping.pattern_id}"
+            )
+        if not dispatch_path_leaves_source(
+            pattern.stops[source_index], pattern.stops[destination_index]
+        ):
+            raise TransitDataError(
+                "recommendation mapping path is too short for dispatch: "
+                f"{mapping.pattern_id}"
+            )
         identity = (
             mapping.hub_id,
             _normalize(mapping.route_key),
@@ -178,6 +204,22 @@ def mapping_stop_indexes(
             mapping.destination_stop_sequence,
         ),
     )
+
+
+def dispatch_path_leaves_source(
+    source: ScheduledStopTime, destination: ScheduledStopTime
+) -> bool:
+    first = source.stop.location
+    second = destination.stop.location
+    lat1 = math.radians(first.lat)
+    lat2 = math.radians(second.lat)
+    delta_lat = lat2 - lat1
+    delta_lon = math.radians(second.lon - first.lon)
+    value = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
+    )
+    return 2 * 6_371_000 * math.asin(math.sqrt(value)) >= MIN_DISPATCH_PATH_DISTANCE_M
 
 
 def _stop_index(pattern: ServicePattern, stop_id: str, sequence: int) -> int:

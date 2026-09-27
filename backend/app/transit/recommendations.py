@@ -20,6 +20,7 @@ from app.domain.types import HubId, ServicePatternId, StopId
 from app.transit.index import TransitDataError, TransitIndex
 from app.transit.mappings import (
     DispatchPathMapping,
+    dispatch_path_leaves_source,
     load_recommendation_mappings,
     mapping_stop_indexes,
 )
@@ -229,6 +230,8 @@ class RecommendationMapper:
                 for source_index, stop_time in enumerate(pattern.stops)
                 if stop_time.stop.id in hub_stops
                 and source_index < len(pattern.stops) - 1
+                and pattern.stops[-1].stop.id not in hub_stops
+                and dispatch_path_leaves_source(stop_time, pattern.stops[-1])
             )
         if not ordered_pairs:
             reason = (
