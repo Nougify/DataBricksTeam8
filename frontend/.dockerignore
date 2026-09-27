@@ -1,3 +1,8 @@
 .git
+.next
 node_modules
 npm-debug.log
+playwright-report
+screenshots
+test-results
+.env*
