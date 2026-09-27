@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.config import DataMode, Settings, get_settings
 from app.data.adapters import build_event_source
-from app.data.models import DispatchEvent, EventStatus, EventWindow
+from app.data.models import EventWindow
 from app.data.store import EventWindowStore
 from app.domain.events import EventType, PendingEvent
 from app.domain.models import (
@@ -20,8 +20,16 @@ from app.domain.models import (
     BusSource,
     BusSourceType,
     BusStatus,
+    DispatchEvent,
+    EventStatus,
 )
-from app.domain.types import AdditionalTripId, BusId, HubId, RouteId
+from app.domain.types import (
+    AdditionalTripId,
+    BusId,
+    DispatchEventId,
+    HubId,
+    RouteId,
+)
 from app.errors import install_error_handlers
 from app.repositories.memory import StateEditor, entities_from
 from app.routing import build_routing_service
@@ -123,7 +131,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         coordinator = MutationCoordinator(
             events,
             initial_clock(resolved_settings),
-            entities_from(buses=fleet),
+            entities_from(
+                buses=fleet,
+                dispatch_events=data.reader().window.events,
+            ),
         )
         clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
         routing = build_routing_service(
@@ -147,7 +158,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await clock_task
 
     application = FastAPI(
-        title="Surge Bus API",
+        title="Pulse Dispatch API",
         version="0.2.0",
         lifespan=lifespan,
     )
@@ -196,8 +207,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def state() -> dict[str, object]:
         runtime: RuntimeOwner = application.state.runtime
         snapshot = runtime.coordinator.snapshot()
-        visible_events = runtime.data.reader().actionable_events(
-            snapshot.clock.current_time
+        visible_events = tuple(
+            event
+            for event in snapshot.entities.dispatch_events.list()
+            if event.actionable_at <= snapshot.clock.current_time
         )
         return {
             "epoch": snapshot.epoch,
@@ -226,7 +239,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> list[DispatchEventResponse]:
         runtime: RuntimeOwner = application.state.runtime
         captured_at = at or runtime.coordinator.snapshot().clock.current_time
-        events = runtime.data.reader().actionable_events(captured_at)
+        events = tuple(
+            event
+            for event in runtime.coordinator.snapshot().entities.dispatch_events.list()
+            if event.actionable_at <= captured_at
+        )
         return [
             _event_response(event)
             for event in events
@@ -241,7 +258,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     async def dispatch_event(event_id: str) -> DispatchEventResponse:
         runtime: RuntimeOwner = application.state.runtime
-        event = runtime.data.reader().event(event_id)
+        event = runtime.coordinator.snapshot().entities.dispatch_events.get(
+            DispatchEventId(event_id)
+        )
         if (
             event is None
             or event.actionable_at > runtime.coordinator.snapshot().clock.current_time
@@ -368,7 +387,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return Mutation(trip)
             if trip.status is not AdditionalTripStatus.PROPOSED:
                 raise HTTPException(status_code=409, detail="trip is not proposed")
-            bus = editor.bus(BusId(trip.bus.id))
+            bus = editor.bus(BusId(trip.bus_id))
             if bus is None or bus.proposed_trip_id != trip.id:
                 raise HTTPException(
                     status_code=409, detail="bus reservation is missing"
@@ -389,7 +408,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 updated_trip,
                 (
                     PendingEvent(
-                        type=EventType.DISPATCH_APPROVED,
+                        type=EventType.PROPOSAL_UPDATED,
                         simulation_time=runtime.clock.clock.current_time,
                         data=updated_trip,
                     ),
@@ -416,7 +435,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return Mutation(trip)
             if trip.status is not AdditionalTripStatus.PROPOSED:
                 raise HTTPException(status_code=409, detail="trip is not proposed")
-            bus = editor.bus(BusId(trip.bus.id))
+            bus = editor.bus(BusId(trip.bus_id))
             if bus is None or bus.proposed_trip_id != trip.id:
                 raise HTTPException(
                     status_code=409, detail="bus reservation is missing"
@@ -437,7 +456,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 updated_trip,
                 (
                     PendingEvent(
-                        type=EventType.DISPATCH_REJECTED,
+                        type=EventType.PROPOSAL_UPDATED,
                         simulation_time=runtime.clock.clock.current_time,
                         data=updated_trip,
                     ),

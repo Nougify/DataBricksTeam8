@@ -16,7 +16,6 @@ from app.domain.events import (
     PendingEvent,
     StateChangedData,
     StateChangeReason,
-    TickData,
 )
 from app.domain.models import ClockStatus, SimulationClock
 from app.domain.types import (
@@ -119,7 +118,7 @@ def _clock_at(
 
 def _state_event(clock: SimulationClock, reason: StateChangeReason) -> PendingEvent:
     return PendingEvent(
-        type=EventType.SIMULATION_STATE_CHANGED,
+        type=EventType.CLOCK_UPDATED,
         simulation_time=clock.current_time,
         data=StateChangedData(**clock.model_dump(), reason=reason),
     )
@@ -276,13 +275,9 @@ class SimulationClockController:
             updated = _clock_at(clock, target, status=final_status)
             events: list[PendingEvent] = [
                 PendingEvent(
-                    type=EventType.SIMULATION_TICK,
+                    type=EventType.CLOCK_UPDATED,
                     simulation_time=target,
-                    data=TickData(
-                        current_time=target,
-                        local_date=target.date(),
-                        hour=target.hour,
-                    ),
+                    data=StateChangedData(**updated.model_dump()),
                 )
             ]
             if final_status is ClockStatus.PAUSED:

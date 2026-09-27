@@ -5,14 +5,13 @@ from app.data.adapters import (
     build_event_source,
 )
 from app.data.models import (
-    DispatchEvent,
     DispatchEventRow,
-    EventRecommendation,
     EventWindow,
     EventWindowMetadata,
 )
 from app.data.reader import EventReader
 from app.data.store import DataUnavailableError, EventWindowStore
+from app.domain.models import DispatchEvent, EventRecommendation
 
 __all__ = [
     "DatabricksEventSource",

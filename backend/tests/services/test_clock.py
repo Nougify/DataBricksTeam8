@@ -45,7 +45,7 @@ def state_reasons(sink: InMemoryEventSink) -> list[StateChangeReason]:
     return [
         event.data.reason
         for event in sink.events()
-        if isinstance(event.data, StateChangedData)
+        if isinstance(event.data, StateChangedData) and event.data.reason is not None
     ]
 
 
@@ -85,7 +85,7 @@ def test_all_allowed_speeds_advance_elapsed_instants(
     assert clock.current_time.astimezone(UTC) == START.astimezone(UTC) + timedelta(
         seconds=2 * speed
     )
-    assert sink.events()[-1].type is EventType.SIMULATION_TICK
+    assert sink.events()[-1].type is EventType.CLOCK_UPDATED
 
 
 def test_speed_and_settings_changes_settle_old_speed_and_are_idempotent() -> None:
@@ -184,7 +184,7 @@ def test_auto_pause_stops_exactly_at_proposal_and_preserves_event_order() -> Non
     assert clock.current_time == proposal_at
     assert clock.status is ClockStatus.PAUSED
     assert calls == ["proposal"]
-    assert sink.events()[-1].type is EventType.SIMULATION_STATE_CHANGED
+    assert sink.events()[-1].type is EventType.CLOCK_UPDATED
     assert state_reasons(sink)[-1] is StateChangeReason.AUTO_PAUSE_PROPOSAL
 
     source.advance(10)

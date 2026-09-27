@@ -11,8 +11,8 @@ from app.domain.models import (
     Bus,
     BusStatus,
     ClockStatus,
+    DispatchEvent,
     SimulationClock,
-    Surge,
 )
 from app.domain.types import AdditionalTripId, BusId
 from app.repositories import ReadRepository, StateEditor, entities_from
@@ -22,7 +22,7 @@ from app.services import (
     Mutation,
     MutationCoordinator,
 )
-from tests.domain.test_models import bus_payload, surge_payload, trip_payload
+from tests.domain.test_models import bus_payload, dispatch_event_payload, trip_payload
 
 NOW = datetime(2026, 7, 1, 10, tzinfo=timezone(-timedelta(hours=7)))
 
@@ -49,10 +49,8 @@ def make_bus(*, reserved_for: str | None = None) -> Bus:
     return Bus.model_validate(payload)
 
 
-def make_surge(*trip_ids: str) -> Surge:
-    payload = surge_payload()
-    payload["additional_trip_ids"] = list(trip_ids)
-    return Surge.model_validate(payload)
+def make_dispatch_event(*trip_ids: str) -> DispatchEvent:
+    return DispatchEvent.model_validate(dispatch_event_payload(*trip_ids))
 
 
 def make_trip(trip_id: str = "trip-1") -> AdditionalTrip:
@@ -62,16 +60,20 @@ def make_trip(trip_id: str = "trip-1") -> AdditionalTrip:
 
 
 def proposal_events(
-    trip: AdditionalTrip, bus: Bus, surge: Surge
+    trip: AdditionalTrip, bus: Bus, event: DispatchEvent
 ) -> tuple[PendingEvent, ...]:
     return (
         PendingEvent(
-            type=EventType.DISPATCH_PROPOSED,
+            type=EventType.PROPOSAL_CREATED,
             simulation_time=NOW,
             data=trip,
         ),
         PendingEvent(type=EventType.BUS_UPDATED, simulation_time=NOW, data=bus),
-        PendingEvent(type=EventType.SURGE_UPDATED, simulation_time=NOW, data=surge),
+        PendingEvent(
+            type=EventType.DISPATCH_EVENT_UPDATED,
+            simulation_time=NOW,
+            data=event,
+        ),
     )
 
 
@@ -90,17 +92,17 @@ def test_atomic_proposal_commit_sequences_events_and_snapshot() -> None:
     coordinator = MutationCoordinator(
         sink,
         make_clock(),
-        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
+        entities_from(buses=(make_bus(),), dispatch_events=(make_dispatch_event(),)),
     )
 
     def propose(state: StateEditor) -> Mutation[str]:
         trip = make_trip()
         bus = make_bus(reserved_for="trip-1")
-        surge = make_surge("trip-1")
+        event = make_dispatch_event("trip-1")
         state.put_trip(trip)
         state.put_bus(bus)
-        state.put_surge(surge)
-        return Mutation("created", proposal_events(trip, bus, surge))
+        state.put_dispatch_event(event)
+        return Mutation("created", proposal_events(trip, bus, event))
 
     assert coordinator.mutate(propose, expected_epoch=0) == "created"
     snapshot = coordinator.snapshot()
@@ -109,9 +111,9 @@ def test_atomic_proposal_commit_sequences_events_and_snapshot() -> None:
     assert snapshot.entities.trips.get(AdditionalTripId("trip-1")) is not None
     assert [event.seq for event in sink.events()] == [1, 2, 3]
     assert [event.type for event in sink.events()] == [
-        EventType.DISPATCH_PROPOSED,
+        EventType.PROPOSAL_CREATED,
         EventType.BUS_UPDATED,
-        EventType.SURGE_UPDATED,
+        EventType.DISPATCH_EVENT_UPDATED,
     ]
 
 
@@ -120,7 +122,7 @@ def test_failed_transaction_rolls_back_state_events_and_sequence() -> None:
     coordinator = MutationCoordinator(
         sink,
         make_clock(),
-        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
+        entities_from(buses=(make_bus(),), dispatch_events=(make_dispatch_event(),)),
     )
 
     def invalid(state: StateEditor) -> Mutation[None]:
@@ -141,7 +143,7 @@ def test_cross_entity_failure_emits_nothing() -> None:
     coordinator = MutationCoordinator(
         sink,
         make_clock(),
-        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
+        entities_from(buses=(make_bus(),), dispatch_events=(make_dispatch_event(),)),
     )
 
     def broken(state: StateEditor) -> Mutation[None]:
@@ -160,7 +162,7 @@ def test_concurrent_proposals_cannot_reserve_one_bus_twice() -> None:
     coordinator = MutationCoordinator(
         sink,
         make_clock(),
-        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
+        entities_from(buses=(make_bus(),), dispatch_events=(make_dispatch_event(),)),
     )
     start = Barrier(3)
 
@@ -173,11 +175,11 @@ def test_concurrent_proposals_cannot_reserve_one_bus_twice() -> None:
                 raise RuntimeError("bus already reserved")
             trip = make_trip(trip_id)
             reserved = make_bus(reserved_for=trip_id)
-            surge = make_surge(trip_id)
+            event = make_dispatch_event(trip_id)
             state.put_trip(trip)
             state.put_bus(reserved)
-            state.put_surge(surge)
-            return Mutation(trip_id, proposal_events(trip, reserved, surge))
+            state.put_dispatch_event(event)
+            return Mutation(trip_id, proposal_events(trip, reserved, event))
 
         return coordinator.mutate(reserve)
 
@@ -202,7 +204,9 @@ def test_concurrent_proposals_cannot_reserve_one_bus_twice() -> None:
 
 def test_epoch_is_checked_before_operation_and_sequence_continues_after_swap() -> None:
     sink = InMemoryEventSink()
-    initial = entities_from(buses=(make_bus(),), surges=(make_surge(),))
+    initial = entities_from(
+        buses=(make_bus(),), dispatch_events=(make_dispatch_event(),)
+    )
     coordinator = MutationCoordinator(sink, make_clock(), initial)
     called = False
 
@@ -219,7 +223,7 @@ def test_epoch_is_checked_before_operation_and_sequence_continues_after_swap() -
     replaced = coordinator.replace_state(initial, simulation_time=NOW, expected_epoch=0)
     assert replaced.epoch == 1
     assert replaced.last_seq == 1
-    assert sink.events()[0].type is EventType.STATE_RESET
+    assert sink.events()[0].type is EventType.SYSTEM_RESET
     assert sink.events()[0].epoch == 1
 
     coordinator.mutate(
@@ -247,7 +251,7 @@ def test_sink_failure_rolls_back_committed_candidate() -> None:
     coordinator = MutationCoordinator(
         FailingSink(),
         make_clock(),
-        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
+        entities_from(buses=(make_bus(),), dispatch_events=(make_dispatch_event(),)),
     )
 
     def update(state: StateEditor) -> Mutation[None]:

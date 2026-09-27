@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from app.data.models import DispatchEvent, EventWindow
+from app.data.models import EventWindow
+from app.domain.models import DispatchEvent
 
 
 class EventReader:

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from threading import RLock
 
-from app.domain.events import PendingEvent, SequencedEvent, StateResetData
+from app.domain.events import EventType, PendingEvent, SequencedEvent, StateResetData
 from app.domain.models import ClockStatus, SimulationClock
 from app.domain.types import Epoch, SequenceNumber, VancouverDateTime
 from app.repositories.memory import SimulationEntities, StateEditor
@@ -124,7 +124,7 @@ class MutationCoordinator:
             )
             SimulationClock.model_validate(candidate_clock.model_dump())
             reset = PendingEvent(
-                type="state.reset",
+                type=EventType.SYSTEM_RESET,
                 simulation_time=simulation_time,
                 data=StateResetData(epoch=next_epoch),
             )

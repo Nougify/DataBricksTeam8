@@ -25,9 +25,9 @@ def test_fixture_filters_window_and_orders_recommendations() -> None:
         "same-time-a",
         "same-time-b",
     ]
-    assert [row.recommendation_id for row in window.events[0].recommendations] == [
-        "r1",
-        "r2",
+    assert [row.source_route for row in window.events[0].recommendations] == [
+        "99",
+        "44",
     ]
 
 

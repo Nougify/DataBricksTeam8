@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
@@ -9,35 +8,27 @@ from pydantic import Field, model_validator
 from app.domain.models import (
     AdditionalTrip,
     Bus,
-    BusStatus,
+    DispatchEvent,
     DomainModel,
-    GeoPoint,
-    HubStatus,
     SimulationClock,
-    Surge,
 )
 from app.domain.types import (
     Epoch,
-    Heading,
-    Hour,
-    NonEmptyBusId,
+    NonEmptyText,
     SequenceNumber,
     VancouverDateTime,
 )
 
 
 class EventType(StrEnum):
-    SIMULATION_TICK = "simulation.tick"
-    SIMULATION_STATE_CHANGED = "simulation.state_changed"
-    STATE_RESET = "state.reset"
-    SURGE_UPDATED = "surge.updated"
-    DISPATCH_PROPOSED = "dispatch.proposed"
-    DISPATCH_APPROVED = "dispatch.approved"
-    DISPATCH_REJECTED = "dispatch.rejected"
+    CLOCK_UPDATED = "clock.updated"
+    DISPATCH_EVENT_UPDATED = "dispatch_event.updated"
+    PROPOSAL_CREATED = "proposal.created"
+    PROPOSAL_UPDATED = "proposal.updated"
     TRIP_UPDATED = "trip.updated"
     BUS_UPDATED = "bus.updated"
-    BUS_POSITIONS_UPDATED = "bus.positions_updated"
-    HUB_DEMAND_UPDATED = "hub.demand_updated"
+    SYSTEM_RESET = "system.reset"
+    SYSTEM_ERROR = "system.error"
 
 
 class StateChangeReason(StrEnum):
@@ -48,14 +39,8 @@ class StateChangeReason(StrEnum):
     AUTO_PAUSE_PROPOSAL = "AUTO_PAUSE_PROPOSAL"
 
 
-class TickData(DomainModel):
-    current_time: VancouverDateTime
-    local_date: date
-    hour: Hour
-
-
 class StateChangedData(SimulationClock):
-    reason: StateChangeReason
+    reason: StateChangeReason | None = None
 
 
 class StateResetData(DomainModel):
@@ -63,26 +48,17 @@ class StateResetData(DomainModel):
     reason: Literal["SEEK"] = "SEEK"
 
 
-class BusPosition(DomainModel):
-    bus_id: NonEmptyBusId
-    location: GeoPoint
-    heading_deg: Heading | None
-    status: BusStatus
-
-
-class BusPositionsData(DomainModel):
-    positions: tuple[BusPosition, ...]
+class SystemErrorData(DomainModel):
+    message: NonEmptyText
 
 
 EventData = (
-    TickData
-    | StateChangedData
+    StateChangedData
     | StateResetData
-    | Surge
+    | SystemErrorData
+    | DispatchEvent
     | AdditionalTrip
     | Bus
-    | BusPositionsData
-    | HubStatus
 )
 
 
@@ -94,17 +70,14 @@ class PendingEvent(DomainModel):
     @model_validator(mode="after")
     def matching_payload(self) -> Self:
         expected: dict[EventType, type[DomainModel]] = {
-            EventType.SIMULATION_TICK: TickData,
-            EventType.SIMULATION_STATE_CHANGED: StateChangedData,
-            EventType.STATE_RESET: StateResetData,
-            EventType.SURGE_UPDATED: Surge,
-            EventType.DISPATCH_PROPOSED: AdditionalTrip,
-            EventType.DISPATCH_APPROVED: AdditionalTrip,
-            EventType.DISPATCH_REJECTED: AdditionalTrip,
+            EventType.CLOCK_UPDATED: StateChangedData,
+            EventType.DISPATCH_EVENT_UPDATED: DispatchEvent,
+            EventType.PROPOSAL_CREATED: AdditionalTrip,
+            EventType.PROPOSAL_UPDATED: AdditionalTrip,
             EventType.TRIP_UPDATED: AdditionalTrip,
             EventType.BUS_UPDATED: Bus,
-            EventType.BUS_POSITIONS_UPDATED: BusPositionsData,
-            EventType.HUB_DEMAND_UPDATED: HubStatus,
+            EventType.SYSTEM_RESET: StateResetData,
+            EventType.SYSTEM_ERROR: SystemErrorData,
         }
         if not isinstance(self.data, expected[self.type]):
             raise ValueError(f"{self.type} has an incompatible payload")

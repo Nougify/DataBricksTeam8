@@ -1,1 +1,1 @@
-"""Surge bus backend application."""
+"""Pulse dispatch backend application."""

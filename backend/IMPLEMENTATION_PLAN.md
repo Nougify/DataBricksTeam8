@@ -31,8 +31,6 @@ Partial or superseded implementation still present:
 - Approval and rejection work, but no production service creates, expires, or
   automatically approves proposals.
 - Seek resets state but does not replay events, movement, or recorded decisions.
-- Legacy v2 forecast/surge models, repository links, API schemas, and event names
-  remain in the runtime.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
 The next implementation step is **03 - Event Repository, Activation, And Clock
@@ -44,7 +42,7 @@ contract.
 
 | Chunk | Status | Work left |
 |---|---|---|
-| 01 Event contract migration | Mostly complete | Migrate trips/repositories from `Surge` and `surge_id` to dispatch events |
+| 01 Event contract migration | Complete | Canonical events and `dispatch_event_id` are authoritative across the runtime |
 | 02 Filtered event adapters and cache | Mostly complete | Finalize live query details and test real export/Databricks rows |
 | 03 Event repository and activation | Partial | Coordinator activation boundaries, deduplication, status changes, and events |
 | 04 GTFS recommendation mapping | Partial | Destination, direction, pattern, and service-date resolution |
@@ -61,33 +59,30 @@ contract.
 
 Complete the following in dependency order:
 
-1. Replace the runtime's legacy `Surge` entity and `surge_id` links with canonical
-   `DispatchEvent` and `dispatch_event_id` entities. Update repositories, event
-   payloads, serializers, and validation together.
-2. Register deterministic event activation and target-time clock boundaries. Store
+1. Register deterministic event activation and target-time clock boundaries. Store
    active event state in the coordinator, deduplicate activation, update status,
    and publish changes only after commit.
-3. Finish source recommendation mapping for destinations, direction, service
+2. Finish source recommendation mapping for destinations, direction, service
    patterns, and representative service dates. Preserve typed visible failures.
-4. Load and validate explicit fleet configuration, including unique IDs, positive
+3. Load and validate explicit fleet configuration, including unique IDs, positive
    capacities, known initial locations, home locations, and empty/custom fleets.
-5. Implement event-to-proposal creation: recommendation fallback, bus ranking,
+4. Implement event-to-proposal creation: recommendation fallback, bus ranking,
    suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
    rollback, and automatic approval mode.
-6. Compose deadhead, service, and return paths and times. Apply proactive lateness
+5. Compose deadhead, service, and return paths and times. Apply proactive lateness
    policy without rejecting normal reactive post-event arrivals.
-7. Implement movement boundaries and interpolation through reserved, deadheading,
+6. Implement movement boundaries and interpolation through reserved, deadheading,
    waiting, in-service, returning, completed, and available states.
-8. Make seek rebuild state and replay all canonical boundaries and eligible human
+7. Make seek rebuild state and replay all canonical boundaries and eligible human
    decisions through the target while preserving old state on load/replay failure.
-9. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+8. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-10. Replace the root health-only frontend with clock controls, event/proposal
+9. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-11. Select an explicit Databricks profile and validate the live/exported event
+10. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-12. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+11. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -150,6 +145,11 @@ in progress in the tracked task list at a time.
 
 ### 01 - Event Contract Migration
 
+**Status:** Complete. Canonical event models live in the domain layer, source rows
+group into those same models, trips link through `dispatch_event_id`, coordinator
+repositories own dispatch events, and the REST/event schema surface no longer
+requires legacy surge, forecast, or dispatch-decision models.
+
 **Scope:** SPEC sections 3-5 and 10.
 
 - Add canonical `DispatchEvent`, `EventRecommendation`, and event-source metadata.
@@ -171,6 +171,10 @@ serialization.
 
 **Done when:** the code has one canonical event model matching SPEC v3 and no core
 runtime interface requires the former `DataSnapshot`.
+
+**Verification:** strict typing and the full test suite pass, and the zero-reference
+gate finds no legacy `Surge`, `surge_id`, forecast model, `DispatchDecision`, or v2
+event-vocabulary references under `backend/app/**/*.py`.
 
 ### 02 - Filtered Event Adapters And Cache
 

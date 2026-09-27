@@ -1,30 +1,20 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
 from math import ceil
 from typing import Self
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
 
-from app.domain.models import DomainModel, GeoPoint
+from app.domain.models import (
+    DispatchEvent,
+    DomainModel,
+    EventMode,
+    EventRecommendation,
+    EventSourceMetadata,
+    EventStatus,
+)
 from app.domain.types import NonEmptyText, NonNegativeFloat, VancouverDateTime
-
-
-class EventMode(StrEnum):
-    REACTIVE = "REACTIVE"
-    PROACTIVE = "PROACTIVE"
-
-
-class EventStatus(StrEnum):
-    PENDING = "PENDING"
-    AWAITING_APPROVAL = "AWAITING_APPROVAL"
-    DISPATCHED = "DISPATCHED"
-    COMPLETED = "COMPLETED"
-    NO_MATCHING_ROUTE = "NO_MATCHING_ROUTE"
-    NO_BUS_AVAILABLE = "NO_BUS_AVAILABLE"
-    EXPIRED = "EXPIRED"
-    INVALID_SOURCE = "INVALID_SOURCE"
 
 
 class DispatchEventRow(DomainModel):
@@ -86,99 +76,6 @@ class DispatchEventRow(DomainModel):
     @property
     def route_key(self) -> str:
         return self.source_route
-
-
-class EventRecommendation(DomainModel):
-    destination: NonEmptyText
-    destination_share: float = Field(ge=0, le=100)
-    route_id: NonEmptyText | None
-    source_route: NonEmptyText
-    extra_bus_trips_est: NonNegativeFloat
-    priority_score: NonNegativeFloat
-    scheduled_trips_that_hour: int | None = Field(default=None, ge=0)
-    extra_people_on_route: NonNegativeFloat | None = None
-    avg_daily_boardings: NonNegativeFloat | None = None
-    pct_trips_overcrowded: NonNegativeFloat | None = None
-    recommendation_id: NonEmptyText | None = Field(default=None, exclude=True)
-
-    @property
-    def destination_share_pct(self) -> float:
-        return self.destination_share
-
-    @property
-    def route_key(self) -> str:
-        return self.source_route
-
-
-class EventSourceMetadata(DomainModel):
-    split: NonEmptyText | None = None
-    direction: NonEmptyText | None = None
-    link: NonEmptyText | None = None
-    version: NonEmptyText | None = None
-    generated_at: VancouverDateTime | None = None
-
-
-class DispatchEvent(DomainModel):
-    id: NonEmptyText
-    hub_id: NonEmptyText | None
-    source_location: NonEmptyText
-    location: GeoPoint | None = None
-    available_at: VancouverDateTime | None
-    actionable_at: VancouverDateTime
-    event_time: VancouverDateTime
-    mode: EventMode
-    surge_type: NonEmptyText | None
-    predicted_people: NonNegativeFloat
-    normal_people: NonNegativeFloat
-    surge_ratio: NonNegativeFloat | None
-    suggested_extra_buses: int = Field(ge=0)
-    priority_score: NonNegativeFloat
-    recommendations: tuple[EventRecommendation, ...] = Field(min_length=1)
-    status: EventStatus = EventStatus.PENDING
-    additional_trip_ids: tuple[NonEmptyText, ...] = ()
-    source: EventSourceMetadata
-    invalid_source_reason: str | None = Field(default=None, exclude=True)
-
-    @property
-    def event_id(self) -> str:
-        return self.id
-
-    @property
-    def source_version(self) -> str | None:
-        return self.source.version
-
-    @property
-    def generated_at(self) -> datetime | None:
-        return self.source.generated_at
-
-    @model_validator(mode="after")
-    def valid_event(self) -> Self:
-        expected = tuple(
-            sorted(
-                self.recommendations,
-                key=lambda row: (
-                    -row.priority_score,
-                    row.source_route,
-                    row.destination,
-                ),
-            )
-        )
-        if self.recommendations != expected:
-            raise ValueError("recommendations must be ordered by priority")
-        expected_actionable = self.available_at or self.event_time
-        expected_mode = (
-            EventMode.PROACTIVE
-            if self.available_at is not None and self.available_at < self.event_time
-            else EventMode.REACTIVE
-        )
-        if self.actionable_at != expected_actionable or self.mode is not expected_mode:
-            raise ValueError("event availability fields are inconsistent")
-        if (
-            self.invalid_source_reason is not None
-            and self.status is not EventStatus.INVALID_SOURCE
-        ):
-            raise ValueError("invalid source events must have INVALID_SOURCE status")
-        return self
 
 
 class EventWindowMetadata(DomainModel):
@@ -267,7 +164,6 @@ def group_event_rows(
         legacy_ids: dict[str, EventRecommendation] = {}
         for row in group:
             recommendation = EventRecommendation(
-                recommendation_id=row.recommendation_id,
                 destination=row.destination,
                 destination_share=row.destination_share,
                 route_id=row.route_id,

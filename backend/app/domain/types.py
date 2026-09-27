@@ -18,21 +18,19 @@ PERMANENT_PACIFIC = timezone(timedelta(hours=-7), name="America/Vancouver")
 
 HubId = NewType("HubId", str)
 BusId = NewType("BusId", str)
-SurgeId = NewType("SurgeId", str)
+DispatchEventId = NewType("DispatchEventId", str)
 AdditionalTripId = NewType("AdditionalTripId", str)
 RouteId = NewType("RouteId", str)
 LineKey = NewType("LineKey", str)
 ServicePatternId = NewType("ServicePatternId", str)
 StopId = NewType("StopId", str)
 ScheduledTripId = NewType("ScheduledTripId", str)
-ForecastVintageId = NewType("ForecastVintageId", str)
-ForecastBucketId = NewType("ForecastBucketId", str)
 
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 NonEmptyHubId = Annotated[HubId, StringConstraints(strip_whitespace=True, min_length=1)]
 NonEmptyBusId = Annotated[BusId, StringConstraints(strip_whitespace=True, min_length=1)]
-NonEmptySurgeId = Annotated[
-    SurgeId, StringConstraints(strip_whitespace=True, min_length=1)
+NonEmptyDispatchEventId = Annotated[
+    DispatchEventId, StringConstraints(strip_whitespace=True, min_length=1)
 ]
 NonEmptyAdditionalTripId = Annotated[
     AdditionalTripId, StringConstraints(strip_whitespace=True, min_length=1)
@@ -51,12 +49,6 @@ NonEmptyStopId = Annotated[
 ]
 NonEmptyScheduledTripId = Annotated[
     ScheduledTripId, StringConstraints(strip_whitespace=True, min_length=1)
-]
-NonEmptyForecastVintageId = Annotated[
-    ForecastVintageId, StringConstraints(strip_whitespace=True, min_length=1)
-]
-NonEmptyForecastBucketId = Annotated[
-    ForecastBucketId, StringConstraints(strip_whitespace=True, min_length=1)
 ]
 
 Latitude = Annotated[float, Field(ge=-90, le=90)]
