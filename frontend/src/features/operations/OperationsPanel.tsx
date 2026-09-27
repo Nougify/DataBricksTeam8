@@ -31,7 +31,7 @@ export function OperationsPanel({ hubId = null }: { hubId?: string | null }) {
           ))}
         </TabsList>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-4">
+      <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto pr-1 pb-4">
         <TabsContent value="events"><EventsView events={data.events} /></TabsContent>
         <TabsContent value="proposals"><ProposalsView proposals={data.proposals} events={dispatchEvents} buses={busesById} /></TabsContent>
         <TabsContent value="trips"><TripsView trips={data.trips} events={dispatchEvents} /></TabsContent>

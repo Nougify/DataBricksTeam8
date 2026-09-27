@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     transit_data_mode: TransitDataMode = TransitDataMode.FIXTURE
     data_source_version: NonEmptyString = "development-fixture-v1"
     gtfs_feed_version: NonEmptyString = "fall-2026"
+    recommendation_mappings_path: Path | None = None
     exported_events_path: Path | None = None
     databricks_host: AnyHttpUrl | None = None
     databricks_http_path: NonEmptyString | None = None

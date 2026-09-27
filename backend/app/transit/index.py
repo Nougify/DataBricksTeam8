@@ -204,6 +204,9 @@ class TransitIndex:
     def pattern(self, pattern_id: ServicePatternId) -> ServicePattern | None:
         return self._pattern_by_id.get(str(pattern_id))
 
+    def trip_template_count(self, pattern_id: ServicePatternId) -> int:
+        return len(self._templates_by_pattern.get(str(pattern_id), ()))
+
     def hubs(self) -> tuple[HubCatchment, ...]:
         return self._hubs
 

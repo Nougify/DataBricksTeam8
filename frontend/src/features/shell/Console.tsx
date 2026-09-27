@@ -77,7 +77,7 @@ export function Console() {
           inert={isTablet && !drawerOpen}
           data-drawer={drawerOpen ? "open" : "closed"}
           className={cn(
-            "relative flex min-w-0 flex-col border-t bg-background outline-none md:border-t-0",
+            "relative flex min-w-0 flex-col border-t bg-background outline-none md:h-full md:min-h-0 md:overflow-hidden md:border-t-0",
             // Tablet: a drawer over the map (card background, the one elevation), sliding in 200 ms.
             "md:max-xl:absolute md:max-xl:inset-y-0 md:max-xl:right-0 md:max-xl:z-20 md:max-xl:w-[380px]",
             "md:max-xl:border-l md:max-xl:bg-card md:max-xl:shadow-float",

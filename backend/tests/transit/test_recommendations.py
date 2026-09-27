@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -14,6 +15,10 @@ from app.transit import (
     RecommendationMapper,
     TransitDataError,
     build_fixture_transit_index,
+)
+from app.transit.mappings import (
+    DispatchPathMapping,
+    RecommendationMappingArtifact,
 )
 
 PACIFIC = timezone(-timedelta(hours=7))
@@ -51,7 +56,7 @@ def test_mapper_resolves_first_feasible_recommendation_and_preserves_fallback() 
     assert fallback.failure_code is RecommendationFailureCode.UNKNOWN_ROUTE
 
 
-def test_unknown_destination_and_incompatible_direction_are_typed() -> None:
+def test_unknown_destination_falls_back_to_route_terminal() -> None:
     event = fixture_event()
     unknown_destination = event.model_copy(
         update={
@@ -64,16 +69,56 @@ def test_unknown_destination_and_incompatible_direction_are_typed() -> None:
     )
 
     destination_result = fixture_mapper().resolve_event(unknown_destination)
+
+    recommendation = destination_result.recommendations[0]
+    assert destination_result.status is EventStatus.PENDING
+    assert recommendation.destination == "Not a GTFS stop"
+    assert recommendation.mapping_status is RecommendationMappingStatus.RESOLVED
+    assert recommendation.candidates[0].destination_stop_id == "ALMA"
+
+
+def test_saved_dispatch_path_is_used_before_runtime_mapping(tmp_path: Path) -> None:
+    mapping_path = tmp_path / "recommendation-mappings.json"
+    mapping_path.write_text(
+        RecommendationMappingArtifact(
+            gtfs_feed_version="fall-2026",
+            mappings=(
+                DispatchPathMapping(
+                    hub_id="ubc",
+                    route_key="Saved route",
+                    route_id="fixture-99",
+                    pattern_id="fixture-pattern-99",
+                    source_stop_id="UBC1",
+                    source_stop_sequence=1,
+                    destination_stop_id="ALMA",
+                    destination_stop_sequence=2,
+                ),
+            ),
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+    event = fixture_event()
+    recommendation = event.recommendations[0].model_copy(
+        update={"source_route": "Saved route", "destination": "Unmapped area"}
+    )
+    event = event.model_copy(update={"recommendations": (recommendation,)})
+    settings = Settings(recommendation_mappings_path=mapping_path)
+
+    result = fixture_mapper(settings).resolve_event(event).recommendations[0]
+
+    assert result.mapping_status is RecommendationMappingStatus.RESOLVED
+    assert result.route_id == "fixture-99"
+    assert result.candidates[0].pattern_id == "fixture-pattern-99"
+    assert result.candidates[0].destination_stop_id == "ALMA"
+
+
+def test_incompatible_direction_is_typed() -> None:
+    event = fixture_event()
     directed = event.model_copy(
         update={"source": event.source.model_copy(update={"direction": "1"})}
     )
     direction_result = fixture_mapper().resolve_event(directed)
 
-    assert destination_result.status is EventStatus.INVALID_SOURCE
-    assert (
-        destination_result.recommendations[0].failure_code
-        is RecommendationFailureCode.UNKNOWN_DESTINATION
-    )
     assert direction_result.status is EventStatus.NO_MATCHING_ROUTE
     assert (
         direction_result.recommendations[0].failure_code

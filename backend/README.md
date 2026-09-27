@@ -36,6 +36,13 @@ the Databricks CLI is not required by the running service. Configure
 `DATA_SOURCE_VERSION`. The token should have only the workspace and table access
 needed to execute the bounded read query on the selected warehouse.
 
+GTFS dispatch paths can be persisted in `data/recommendation_mappings.json` and
+enabled with `RECOMMENDATION_MAPPINGS_PATH`. Records are keyed by source hub and
+route key and contain the canonical route, pattern, source stop, and terminal
+stop. The backend validates the artifact against `GTFS_FEED_VERSION`, tries saved
+paths first, and falls back to dynamic GTFS resolution when a saved pattern has
+no service for the event date.
+
 ## Fleet configuration
 
 Set `FLEET_CONFIG_PATH` to a JSON file to use an explicit backend-owned fleet.

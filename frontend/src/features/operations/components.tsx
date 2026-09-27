@@ -61,8 +61,8 @@ function EventSource({ event }: { event: DispatchEvent }) {
 }
 
 function Recommendation({ event }: { event: DispatchEvent }) {
-  const top = event.recommendations[0];
-  const otherFailures = event.recommendations.slice(1).filter((item) => item.mapping_status === "INVALID");
+  const top = event.recommendations.find((item) => item.mapping_status === "RESOLVED") ?? event.recommendations[0];
+  const otherFailures = event.recommendations.filter((item) => item !== top && item.mapping_status === "INVALID");
   return (
     <div className="rounded-lg bg-muted/55 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -85,12 +85,21 @@ function Recommendation({ event }: { event: DispatchEvent }) {
           Mapping {humanize(top.mapping_status)}{top.route_id ? ` · ${top.route_id}` : ""}
         </p>
       )}
-      {otherFailures.map((item) => (
-        <div key={`${item.source_route}:${item.destination}`} role="alert" className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
-          <span className="font-semibold">Route {item.source_route} mapping failed: {humanize(item.failure_code ?? "invalid")}</span>
-          {item.failure_reason && <p className="mt-0.5">{item.failure_reason}</p>}
-        </div>
-      ))}
+      {otherFailures.length > 0 && (
+        <details className="mt-2 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-medium">
+            {otherFailures.length} {otherFailures.length === 1 ? "alternative" : "alternatives"} unavailable
+          </summary>
+          <div className="mt-2 space-y-2">
+            {otherFailures.map((item) => (
+              <div key={`${item.source_route}:${item.destination}`} className="rounded-md border p-2">
+                <span className="font-semibold">Route {item.source_route}: {humanize(item.failure_code ?? "invalid")}</span>
+                {item.failure_reason && <p className="mt-0.5">{item.failure_reason}</p>}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }
