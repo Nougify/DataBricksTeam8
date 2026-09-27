@@ -2,6 +2,9 @@ services:
   backend:
     build:
       context: ./backend
+    environment:
+      TRANSIT_DATA_MODE: gtfs
+      DESTINATION_ALIASES: '{"Downtown":["8649"],"Broadway":["8649"]}'
     ports:
       - "8000:8000"
 

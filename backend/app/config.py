@@ -47,6 +47,11 @@ class DataMode(StrEnum):
     FIXTURE = "fixture"
 
 
+class TransitDataMode(StrEnum):
+    FIXTURE = "fixture"
+    GTFS = "gtfs"
+
+
 class ReturnPolicy(StrEnum):
     HOME = "home"
 
@@ -81,6 +86,7 @@ class Settings(BaseSettings):
     approval_timeout_minutes: PositiveInt = 30
 
     data_mode: DataMode = DataMode.FIXTURE
+    transit_data_mode: TransitDataMode = TransitDataMode.FIXTURE
     data_source_version: NonEmptyString = "development-fixture-v1"
     gtfs_feed_version: NonEmptyString = "fall-2026"
     exported_events_path: Path | None = None
@@ -103,7 +109,7 @@ class Settings(BaseSettings):
     fleet_config_path: Path | None = None
     max_buses_per_event: PositiveInt = 3
     hub_aliases: dict[str, str] = Field(default_factory=lambda: {"UBC": "ubc"})
-    route_aliases: dict[str, str] = Field(default_factory=lambda: {"99": "fixture-99"})
+    route_aliases: dict[str, str] = Field(default_factory=dict)
     destination_aliases: dict[str, tuple[str, ...]] = Field(
         default_factory=_default_destination_aliases
     )

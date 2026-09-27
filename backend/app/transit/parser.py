@@ -79,6 +79,7 @@ _ROUTE_TYPES = {
     "3": TransitMode.BUS,
     "4": TransitMode.SEABUS,
 }
+_NON_FIXED_ROUTE_TYPES = {"715"}  # Demand-response service, not dispatchable.
 
 _SERVICE_TIME = re.compile(r"^(\d+):([0-5]\d):([0-5]\d)$")
 
@@ -143,18 +144,35 @@ def _build_index(
     representative_dates: Mapping[DayType, date],
     hubs: tuple[HubCatchment, ...],
 ) -> TransitIndex:
-    routes = _routes(rows["routes.txt"])
+    ignored_route_ids = {
+        _required(row, "route_id", "routes.txt")
+        for row in rows["routes.txt"]
+        if row["route_type"].strip() in _NON_FIXED_ROUTE_TYPES
+    }
+    routes = _routes(
+        tuple(
+            row
+            for row in rows["routes.txt"]
+            if _required(row, "route_id", "routes.txt") not in ignored_route_ids
+        )
+    )
     stops = _stops(rows["stops.txt"])
     route_by_id = _by_id(routes, lambda item: str(item.route_id), "route")
     stop_by_id = _by_id(stops, lambda item: str(item.id), "stop")
-    shapes = _shapes(rows["shapes.txt"])
+    trip_rows = _unique_rows(rows["trips.txt"], "trip_id", "trip")
+    ignored_shape_ids = {
+        row["shape_id"].strip()
+        for row in trip_rows.values()
+        if _required(row, "route_id", "trips.txt") in ignored_route_ids
+        and row["shape_id"].strip()
+    }
+    shapes = _shapes(rows["shapes.txt"], ignored_shape_ids=ignored_shape_ids)
     calendars = _calendars(rows["calendar.txt"])
     exceptions = _exceptions(rows["calendar_dates.txt"])
     known_services = {rule.service_id for rule in calendars} | {
         item.service_id for item in exceptions
     }
 
-    trip_rows = _unique_rows(rows["trips.txt"], "trip_id", "trip")
     stop_times_by_trip: dict[str, list[dict[str, str]]] = defaultdict(list)
     seen_sequences: set[tuple[str, int]] = set()
     for row in rows["stop_times.txt"]:
@@ -174,6 +192,9 @@ def _build_index(
         route_id = _required(row, "route_id", "trips.txt")
         service_id = _required(row, "service_id", "trips.txt")
         shape_id = row["shape_id"].strip()
+        if route_id in ignored_route_ids:
+            stop_times_by_trip.pop(trip_id, None)
+            continue
         if route_id not in route_by_id:
             raise GtfsLoadError(f"trip {trip_id} references unknown route {route_id}")
         if service_id not in known_services:
@@ -329,6 +350,8 @@ def _stops(rows: tuple[dict[str, str], ...]) -> tuple[Stop, ...]:
 
 def _shapes(
     rows: tuple[dict[str, str], ...],
+    *,
+    ignored_shape_ids: frozenset[str] | set[str] = frozenset(),
 ) -> dict[str, GeoJsonLineString]:
     points: dict[str, list[tuple[int, tuple[float, float]]]] = defaultdict(list)
     seen: set[tuple[str, int]] = set()
@@ -349,6 +372,8 @@ def _shapes(
     result: dict[str, GeoJsonLineString] = {}
     for shape_id, values in points.items():
         if len(values) < 2:
+            if shape_id in ignored_shape_ids:
+                continue
             raise GtfsLoadError(f"shape {shape_id} must contain at least two points")
         try:
             result[shape_id] = GeoJsonLineString(

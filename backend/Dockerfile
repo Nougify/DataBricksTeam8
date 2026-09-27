@@ -23,6 +23,7 @@ WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app app ./app
 COPY --chown=app:app config ./config
+COPY --chown=app:app data ./data
 
 EXPOSE 8000
 

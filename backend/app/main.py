@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.api.schemas import StateSnapshot
 from app.api.serializers import serialize_bus, serialize_state
-from app.config import DataMode, Settings, get_settings
+from app.config import Settings, TransitDataMode, get_settings
 from app.data.adapters import build_event_source
 from app.data.store import EventWindowStore
 from app.domain.models import DispatchEvent, EventStatus
@@ -108,7 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 resolved_settings.gtfs_feed_version,
                 resolved_settings.gtfs_service_day_mapping,
             )
-            if resolved_settings.data_mode is DataMode.FIXTURE
+            if resolved_settings.transit_data_mode is TransitDataMode.FIXTURE
             else load_gtfs_directory(
                 resolved_settings.gtfs_source,
                 feed_version=resolved_settings.gtfs_feed_version,
