@@ -54,14 +54,14 @@ forecast/origin/analytics endpoints against the superseded contract.
 | 08 Movement lifecycle | Complete | Atomic progression, interpolation, completion, cancellation, and return release |
 | 09 Deterministic seek | Complete | Atomic replay, decision cutoff, window replacement, stable state, and reset publication |
 | 10 REST and WebSocket | Complete | Atomic REST/WebSocket snapshots, ordered events, reconnect, gap, and reset handling |
-| 11 Real-data gate | Not started | Validate selected profile, warehouse, source, mappings, and demo window |
+| 11 Real-data gate | Not started | Validate API access, warehouse, source, mappings, and demo window |
 | 12 Demo acceptance | Not started | Operational frontend, end-to-end automation, Docker smoke tests, and CI |
 
 ### 1.2 Remaining Critical Path
 
 Complete the following in dependency order:
 
-1. Select an explicit Databricks profile and validate the live/exported event
+1. Configure Databricks SQL Statement Execution API access and validate the live/exported event
    contract, table/view, warehouse, aliases, source version policy, and demo range.
 2. Replace the root health-only frontend with clock controls, event/proposal
    decisions, fleet movement, trip lifecycle, source provenance, and reconnect
@@ -85,7 +85,8 @@ Complete the following in dependency order:
 - Keep one coordinator authority for clock and all runtime mutations.
 - Update schemas, fixtures, tests, `SPEC.md`, and this plan together when the
   contract changes.
-- For Databricks operations, ask which CLI profile to use and pass it explicitly.
+- Runtime Databricks access uses the SQL Statement Execution API with an explicit
+  workspace host, warehouse HTTP path, and scoped token; no CLI profile is required.
 
 Each chunk is complete only when code, tests, typing, formatting, and relevant
 documentation pass. Required checks are:
@@ -383,7 +384,8 @@ documented REST and WebSocket contracts.
 
 **Depends on:** 02, 04, 05, and 10.
 
-- Confirm the explicit Databricks profile and serverless SQL warehouse.
+- Confirm the Databricks workspace host, scoped API token, and serverless SQL warehouse
+  HTTP path.
 - Confirm catalog/schema/table or view and least-privilege read permissions.
 - Validate bound window queries against real rows.
 - Confirm event ID stability, timezone, optional availability semantics,
@@ -440,7 +442,7 @@ outside the critical path and must not delay Checkpoint D.
 | Backend-owned simulated fleet | Decided | Configure buses locally; no Databricks fleet dependency |
 | Reactive events without `available_at` | Decided | Activate at `event_time` |
 | Proactive events with `available_at` | Decided | Activate earlier; target `event_time` |
-| Databricks source location | Open | Confirm catalog, schema, table/view, profile, and warehouse |
+| Databricks source location | Open | Confirm catalog, schema, table/view, API credentials, and warehouse |
 | Event IDs | Open | Confirm source field or deterministic generation policy |
 | Timestamp encoding | Open | Confirm timezone and normalize explicitly |
 | Destination share scale | Open | Confirm fraction versus percentage points |

@@ -630,7 +630,8 @@ Confirmed:
 Inputs still required before live integration:
 
 - Exact catalog, schema, and table/view name.
-- CLI profile and SQL warehouse to use.
+- Workspace host, scoped API token, and serverless SQL warehouse HTTP path for the
+  SQL Statement Execution API.
 - Whether `available_at` will be supplied.
 - Canonical source timezone and timestamp encoding.
 - Stable `event_id` generation if the source does not already provide it.

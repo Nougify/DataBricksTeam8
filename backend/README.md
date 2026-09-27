@@ -29,6 +29,13 @@ settings use JSON syntax. `APP_ENV` accepts `development`, `test`, or
 External data modes fail startup unless their required connection or snapshot
 settings are supplied; they never fall back to fixture data.
 
+Databricks mode connects directly through the SQL Statement Execution REST API;
+the Databricks CLI is not required by the running service. Configure
+`DATABRICKS_HOST`, `DATABRICKS_HTTP_PATH`, and `DATABRICKS_TOKEN` together with
+`DATA_CATALOG`, `DATA_SCHEMA`, `DISPATCH_EVENTS_TABLE`, and
+`DATA_SOURCE_VERSION`. The token should have only the workspace and table access
+needed to execute the bounded read query on the selected warehouse.
+
 ## Fleet configuration
 
 Set `FLEET_CONFIG_PATH` to a JSON file to use an explicit backend-owned fleet.
