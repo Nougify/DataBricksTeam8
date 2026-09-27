@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from app.config import DataMode, Settings, get_settings
 from app.data.adapters import build_event_source
-from app.data.models import EventWindow
 from app.data.store import EventWindowStore
 from app.domain.events import EventType, PendingEvent
 from app.domain.models import (
@@ -43,6 +42,7 @@ from app.services.clock import (
 from app.services.coordinator import Mutation, MutationCoordinator
 from app.services.events import InMemoryEventSink
 from app.transit import (
+    RecommendationMapper,
     build_fixture_transit_index,
     default_hub_catchments,
     load_gtfs_directory,
@@ -107,7 +107,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         )
         data.install(
-            _resolve_event_window(data.reader().window, transit, resolved_settings)
+            RecommendationMapper(transit, resolved_settings).resolve_window(
+                data.reader().window
+            )
         )
         events = InMemoryEventSink()
         first_hub = transit.hubs()[0]
@@ -487,61 +489,3 @@ app = create_app()
 def _event_response(event: object) -> DispatchEventResponse:
     assert isinstance(event, DispatchEvent)
     return DispatchEventResponse.model_validate(event.model_dump(mode="json"))
-
-
-def _resolve_event_window(
-    window: EventWindow, transit: object, settings: Settings
-) -> EventWindow:
-    from app.transit.index import TransitIndex
-
-    assert isinstance(transit, TransitIndex)
-    hubs = {str(hub.hub_id): hub for hub in transit.hubs()}
-    routes = {str(route.route_id): route for route in transit.routes()}
-    line_routes = {str(route.line_key): route for route in transit.routes()}
-    events: list[DispatchEvent] = []
-    for event in window.events:
-        mapped_hub_id = event.hub_id or settings.hub_aliases.get(
-            event.source_location, event.source_location
-        )
-        hub = hubs.get(str(mapped_hub_id))
-        recommendations = tuple(
-            recommendation.model_copy(
-                update={
-                    "route_id": (
-                        route.route_id
-                        if (
-                            route := routes.get(
-                                settings.route_aliases.get(
-                                    recommendation.source_route,
-                                    recommendation.source_route,
-                                )
-                            )
-                            or line_routes.get(recommendation.source_route)
-                        )
-                        else None
-                    )
-                }
-            )
-            for recommendation in event.recommendations
-        )
-        invalid_reason = None
-        if hub is None:
-            invalid_reason = f"unknown source location: {event.source_location}"
-        elif not any(item.route_id is not None for item in recommendations):
-            invalid_reason = "no recommendation maps to a GTFS route"
-        events.append(
-            event.model_copy(
-                update={
-                    "hub_id": str(hub.hub_id) if hub is not None else None,
-                    "location": hub.location if hub is not None else None,
-                    "recommendations": recommendations,
-                    "status": (
-                        EventStatus.INVALID_SOURCE
-                        if invalid_reason is not None
-                        else EventStatus.PENDING
-                    ),
-                    "invalid_source_reason": invalid_reason,
-                }
-            )
-        )
-    return window.model_copy(update={"events": tuple(events)})

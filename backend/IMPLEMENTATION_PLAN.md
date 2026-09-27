@@ -25,16 +25,16 @@ Partial or superseded implementation still present:
 
 - Event activation is coordinator-owned and deterministic, but proposal creation
   and downstream event status transitions remain for chunk 06.
-- Hub and route aliases resolve, but destination, direction, service-pattern, and
-  service-date feasibility do not.
+- Recommendations now resolve to typed GTFS route, destination, direction,
+  pattern, and service-date candidates; real-data aliases remain for chunk 11.
 - Generated fixture buses work, but `fleet_config_path` is not loaded or validated.
 - Approval and rejection work, but no production service creates, expires, or
   automatically approves proposals.
 - Seek rebuilds event activation but does not replay movement or recorded decisions.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **04 - GTFS Recommendation Mapping**, followed by
-completion of **05-07** before movement and replay. Do not build additional
+The next implementation step is **05 - Backend Fleet Configuration**, followed by
+completion of **06-07** before movement and replay. Do not build additional
 forecast/origin/analytics endpoints against the superseded contract.
 
 ### 1.1 Implementation Status
@@ -44,7 +44,7 @@ forecast/origin/analytics endpoints against the superseded contract.
 | 01 Event contract migration | Complete | Canonical events and `dispatch_event_id` are authoritative across the runtime |
 | 02 Filtered event adapters and cache | Mostly complete | Finalize live query details and test real export/Databricks rows |
 | 03 Event repository and activation | Complete | Loaded events activate once through coordinator-owned keyed boundaries |
-| 04 GTFS recommendation mapping | Partial | Destination, direction, pattern, and service-date resolution |
+| 04 GTFS recommendation mapping | Complete | Typed deterministic route, destination, pattern, direction, and service-date candidates |
 | 05 Backend fleet configuration | Partial | File-backed fleet loading and validation |
 | 06 Proposal and approval | Partial | Proposal creation, reservation, expiry, automatic approval, and fleet caps |
 | 07 Routing foundations | Partial | Deadhead, service, and return itinerary composition |
@@ -58,27 +58,25 @@ forecast/origin/analytics endpoints against the superseded contract.
 
 Complete the following in dependency order:
 
-1. Finish source recommendation mapping for destinations, direction, service
-   patterns, and representative service dates. Preserve typed visible failures.
-2. Load and validate explicit fleet configuration, including unique IDs, positive
+1. Load and validate explicit fleet configuration, including unique IDs, positive
    capacities, known initial locations, home locations, and empty/custom fleets.
-3. Implement event-to-proposal creation: recommendation fallback, bus ranking,
+2. Implement event-to-proposal creation: recommendation fallback, bus ranking,
    suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
    rollback, and automatic approval mode.
-4. Compose deadhead, service, and return paths and times. Apply proactive lateness
+3. Compose deadhead, service, and return paths and times. Apply proactive lateness
    policy without rejecting normal reactive post-event arrivals.
-5. Implement movement boundaries and interpolation through reserved, deadheading,
+4. Implement movement boundaries and interpolation through reserved, deadheading,
    waiting, in-service, returning, completed, and available states.
-6. Make seek rebuild state and replay all canonical boundaries and eligible human
+5. Make seek rebuild state and replay all canonical boundaries and eligible human
    decisions through the target while preserving old state on load/replay failure.
-7. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+6. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-8. Replace the root health-only frontend with clock controls, event/proposal
+7. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-9. Select an explicit Databricks profile and validate the live/exported event
+8. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-10. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+9. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -226,6 +224,12 @@ events without consulting Databricks per tick.
 ### 04 - GTFS Recommendation Mapping
 
 **Depends on:** 01.
+
+**Status:** Complete. Source aliases are validated against immutable GTFS data.
+Every recommendation retains either stable service-backed route/pattern/source and
+destination-stop candidates or a typed visible failure. Matching enforces hub
+service, downstream destination order, optional direction, representative service
+dates, dispatch eligibility, and previous-service-day overflow trips.
 
 - Preserve immutable GTFS routes, stops, trips, patterns, schedules, and shapes.
 - Add explicit source hub and route alias maps.

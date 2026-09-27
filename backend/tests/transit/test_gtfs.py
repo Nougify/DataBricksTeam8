@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from app.domain.models import DayType, GeoJsonMultiLineString, TransitMode
+from app.config import Settings
+from app.data.adapters import FixtureEventSource
+from app.domain.models import (
+    DayType,
+    GeoJsonMultiLineString,
+    RecommendationMappingStatus,
+    TransitMode,
+)
 from app.domain.types import HubId, RouteId
 from app.transit import (
     GtfsLoadError,
+    RecommendationMapper,
     TransitDataError,
     default_hub_catchments,
     load_gtfs_directory,
@@ -190,6 +198,37 @@ def test_scheduled_trip_preserves_gtfs_identity_and_overflow_service_date(
         "t-delayed",
         "t-late",
     ]
+
+
+def test_mapper_uses_previous_service_date_for_overflow_trip(tmp_path: Path) -> None:
+    write_feed(tmp_path)
+    index = load_feed(tmp_path)
+    pacific = timezone(-timedelta(hours=7))
+    source_event = (
+        FixtureEventSource("test-v1")
+        .load_window(
+            datetime(2026, 7, 10, 9, tzinfo=pacific),
+            datetime(2026, 7, 10, 15, tzinfo=pacific),
+        )
+        .events[0]
+    )
+    event = source_event.model_copy(
+        update={
+            "event_time": datetime(2026, 10, 15, 0, 15, tzinfo=pacific),
+            "source": source_event.source.model_copy(update={"direction": "0"}),
+        }
+    )
+    settings = Settings(
+        route_aliases={"99": "099"},
+        destination_aliases={"Downtown": ("ALMA",), "Broadway": ("ALMA",)},
+    )
+
+    result = RecommendationMapper(index, settings).resolve_event(event)
+    recommendation = result.recommendations[0]
+
+    assert recommendation.mapping_status is RecommendationMappingStatus.RESOLVED
+    assert recommendation.candidates[0].requested_service_date == date(2026, 10, 14)
+    assert recommendation.candidates[0].scheduled_trip_ids == ("2026-10-14:t-late",)
 
 
 def test_shapeless_trip_remains_readable_but_is_not_dispatch_eligible(

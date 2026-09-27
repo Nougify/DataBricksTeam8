@@ -26,6 +26,14 @@ PositiveInt = Annotated[int, Field(gt=0)]
 UnitWeight = Annotated[float, Field(ge=0, le=1)]
 
 
+def _default_destination_aliases() -> dict[str, tuple[str, ...]]:
+    return {"Downtown": ("ALMA",), "Broadway": ("ALMA",)}
+
+
+def _default_direction_aliases() -> dict[str, Literal[0, 1]]:
+    return {"0": 0, "1": 1}
+
+
 class AppEnvironment(StrEnum):
     DEVELOPMENT = "development"
     TEST = "test"
@@ -94,6 +102,12 @@ class Settings(BaseSettings):
     max_buses_per_event: PositiveInt = 3
     hub_aliases: dict[str, str] = Field(default_factory=lambda: {"UBC": "ubc"})
     route_aliases: dict[str, str] = Field(default_factory=lambda: {"99": "fixture-99"})
+    destination_aliases: dict[str, tuple[str, ...]] = Field(
+        default_factory=_default_destination_aliases
+    )
+    direction_aliases: dict[str, Literal[0, 1]] = Field(
+        default_factory=_default_direction_aliases
+    )
 
     routing_provider: RoutingProvider = RoutingProvider.STRAIGHT_LINE
     routing_speed_kph: PositiveFloat = 30

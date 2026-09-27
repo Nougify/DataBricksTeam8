@@ -6,10 +6,12 @@ from app.transit.models import (
     ServiceDateResolution,
 )
 from app.transit.parser import GtfsLoadError, load_gtfs_directory, parse_service_time
+from app.transit.recommendations import RecommendationMapper
 
 __all__ = [
     "GtfsLoadError",
     "HubCatchment",
+    "RecommendationMapper",
     "ScheduledDeparture",
     "ServiceDateResolution",
     "TransitDataError",

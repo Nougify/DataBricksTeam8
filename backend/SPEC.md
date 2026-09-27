@@ -202,6 +202,18 @@ The notation below defines required public fields. `?` means nullable.
 ```text
 GeoPoint = {lat: number, lon: number}
 
+RecommendationCandidate = {
+  route_id: string,
+  pattern_id: string,
+  source_stop_id: string,
+  destination_stop_id: string,
+  direction_id: integer?,
+  requested_service_date: date,
+  feed_service_date: date,
+  representative_service: boolean,
+  scheduled_trip_ids: string[]
+}
+
 EventRecommendation = {
   destination: string,
   destination_share: number,
@@ -212,7 +224,15 @@ EventRecommendation = {
   scheduled_trips_that_hour: integer?,
   extra_people_on_route: number?,
   avg_daily_boardings: number?,
-  pct_trips_overcrowded: number?
+  pct_trips_overcrowded: number?,
+  mapping_status: "UNRESOLVED" | "RESOLVED" | "INVALID",
+  failure_code: "UNKNOWN_HUB" | "UNKNOWN_ROUTE" | "AMBIGUOUS_ROUTE"
+              | "ROUTE_NOT_SERVING_HUB" | "UNKNOWN_DESTINATION"
+              | "DESTINATION_NOT_ON_ROUTE" | "UNKNOWN_DIRECTION"
+              | "INCOMPATIBLE_DIRECTION" | "NO_DISPATCH_ELIGIBLE_PATTERN"
+              | "NO_SERVICE_ON_DATE" | null,
+  failure_reason: string?,
+  candidates: RecommendationCandidate[]
 }
 
 DispatchEvent = {
@@ -450,7 +470,8 @@ Required configuration groups:
 - Simulation: bounds, start, speed, approval mode, proposal timeout.
 - Event source: mode (`fixture`, `exported_events`, or `databricks`), source
   version, query window, table/view identity, host, HTTP path, and credentials.
-- Mapping: source hub aliases, source route aliases, destination matching policy.
+- Mapping: source hub aliases, source route aliases, destination-to-stop aliases,
+  direction aliases, and exact stop-ID/name matching.
 - GTFS: feed path/version and representative service dates.
 - Fleet: buses, capacities, initial locations, and per-event proposal cap.
 - Routing: provider and fallback speed.

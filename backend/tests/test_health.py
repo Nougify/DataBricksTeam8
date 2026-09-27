@@ -93,6 +93,10 @@ def test_v3_detail_and_route_endpoints() -> None:
 
     assert event.status_code == 200
     assert event.json()["recommendations"][0]["route_id"] == "fixture-99"
+    assert event.json()["recommendations"][0]["mapping_status"] == "RESOLVED"
+    assert event.json()["recommendations"][0]["candidates"][0]["pattern_id"] == (
+        "fixture-pattern-99"
+    )
     assert bus.status_code == 200
     assert bus.json()["capacity"] == 50
     assert routes.status_code == 200

@@ -23,6 +23,7 @@ from app.domain.types import (
     VANCOUVER,
     HubId,
     RouteId,
+    ServicePatternId,
     StopId,
 )
 from app.transit.models import (
@@ -83,15 +84,20 @@ class TransitIndex:
 
         patterns_by_route: dict[str, list[ServicePattern]] = defaultdict(list)
         templates_by_route: dict[str, list[TripTemplate]] = defaultdict(list)
+        templates_by_pattern: dict[str, list[TripTemplate]] = defaultdict(list)
         for pattern in self._patterns:
             patterns_by_route[str(pattern.route.route_id)].append(pattern)
         for template in self._templates:
             templates_by_route[template.route_id].append(template)
+            templates_by_pattern[str(template.pattern_id)].append(template)
         self._patterns_by_route = MappingProxyType(
             {key: tuple(value) for key, value in patterns_by_route.items()}
         )
         self._templates_by_route = MappingProxyType(
             {key: tuple(value) for key, value in templates_by_route.items()}
+        )
+        self._templates_by_pattern = MappingProxyType(
+            {key: tuple(value) for key, value in templates_by_pattern.items()}
         )
 
         hub_stops: dict[str, tuple[StopId, ...]] = {}
@@ -191,6 +197,12 @@ class TransitIndex:
 
     def stop(self, stop_id: StopId) -> Stop | None:
         return self._stop_by_id.get(str(stop_id))
+
+    def stops(self) -> tuple[Stop, ...]:
+        return self._stops
+
+    def pattern(self, pattern_id: ServicePatternId) -> ServicePattern | None:
+        return self._pattern_by_id.get(str(pattern_id))
 
     def hubs(self) -> tuple[HubCatchment, ...]:
         return self._hubs
@@ -294,6 +306,17 @@ class TransitIndex:
         trips = [
             self._schedule(template, requested_date)
             for template in self._templates_by_route.get(str(route_id), ())
+            if template.service_id in active
+        ]
+        return tuple(sorted(trips, key=lambda item: (item.start_time, item.id)))
+
+    def scheduled_trips_for_pattern(
+        self, pattern_id: ServicePatternId, requested_date: date
+    ) -> tuple[ScheduledTrip, ...]:
+        active = self.active_service_ids(requested_date)
+        trips = [
+            self._schedule(template, requested_date)
+            for template in self._templates_by_pattern.get(str(pattern_id), ())
             if template.service_id in active
         ]
         return tuple(sorted(trips, key=lambda item: (item.start_time, item.id)))

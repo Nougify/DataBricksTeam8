@@ -97,6 +97,37 @@ class EventStatus(StrEnum):
     INVALID_SOURCE = "INVALID_SOURCE"
 
 
+class RecommendationMappingStatus(StrEnum):
+    UNRESOLVED = "UNRESOLVED"
+    RESOLVED = "RESOLVED"
+    INVALID = "INVALID"
+
+
+class RecommendationFailureCode(StrEnum):
+    UNKNOWN_HUB = "UNKNOWN_HUB"
+    UNKNOWN_ROUTE = "UNKNOWN_ROUTE"
+    AMBIGUOUS_ROUTE = "AMBIGUOUS_ROUTE"
+    ROUTE_NOT_SERVING_HUB = "ROUTE_NOT_SERVING_HUB"
+    UNKNOWN_DESTINATION = "UNKNOWN_DESTINATION"
+    DESTINATION_NOT_ON_ROUTE = "DESTINATION_NOT_ON_ROUTE"
+    UNKNOWN_DIRECTION = "UNKNOWN_DIRECTION"
+    INCOMPATIBLE_DIRECTION = "INCOMPATIBLE_DIRECTION"
+    NO_DISPATCH_ELIGIBLE_PATTERN = "NO_DISPATCH_ELIGIBLE_PATTERN"
+    NO_SERVICE_ON_DATE = "NO_SERVICE_ON_DATE"
+
+
+class RecommendationCandidate(DomainModel):
+    route_id: NonEmptyRouteId
+    pattern_id: NonEmptyServicePatternId
+    source_stop_id: NonEmptyStopId
+    destination_stop_id: NonEmptyStopId
+    direction_id: int | None
+    requested_service_date: date
+    feed_service_date: date
+    representative_service: bool
+    scheduled_trip_ids: tuple[NonEmptyScheduledTripId, ...] = Field(min_length=1)
+
+
 class EventRecommendation(DomainModel):
     destination: NonEmptyText
     destination_share: Percentage
@@ -108,6 +139,10 @@ class EventRecommendation(DomainModel):
     extra_people_on_route: NonNegativeFloat | None = None
     avg_daily_boardings: NonNegativeFloat | None = None
     pct_trips_overcrowded: NonNegativeFloat | None = None
+    mapping_status: RecommendationMappingStatus = RecommendationMappingStatus.UNRESOLVED
+    failure_code: RecommendationFailureCode | None = None
+    failure_reason: NonEmptyText | None = None
+    candidates: tuple[RecommendationCandidate, ...] = ()
 
     @property
     def destination_share_pct(self) -> float:
@@ -116,6 +151,24 @@ class EventRecommendation(DomainModel):
     @property
     def route_key(self) -> str:
         return self.source_route
+
+    @model_validator(mode="after")
+    def valid_mapping(self) -> Self:
+        if self.mapping_status is RecommendationMappingStatus.UNRESOLVED:
+            if self.failure_code is not None or self.failure_reason or self.candidates:
+                raise ValueError("unresolved recommendation has mapping output")
+        elif self.mapping_status is RecommendationMappingStatus.RESOLVED:
+            if self.route_id is None or not self.candidates:
+                raise ValueError(
+                    "resolved recommendation requires route and candidates"
+                )
+            if self.failure_code is not None or self.failure_reason is not None:
+                raise ValueError("resolved recommendation cannot have a failure")
+        elif (
+            self.failure_code is None or self.failure_reason is None or self.candidates
+        ):
+            raise ValueError("invalid recommendation requires one typed failure")
+        return self
 
 
 class EventSourceMetadata(DomainModel):
