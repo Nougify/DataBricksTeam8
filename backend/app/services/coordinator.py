@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from threading import RLock
 
 from app.domain.events import PendingEvent, SequencedEvent, StateResetData
-from app.domain.models import SimulationClock
+from app.domain.models import ClockStatus, SimulationClock
 from app.domain.types import Epoch, SequenceNumber, VancouverDateTime
 from app.repositories.memory import SimulationEntities, StateEditor
 from app.services.events import EventSink
@@ -40,9 +40,10 @@ class MutationCoordinator:
         initial_state: SimulationEntities | None = None,
     ) -> None:
         self._event_sink = event_sink
-        self._entities = StateEditor(
+        self._initial_entities = StateEditor(
             initial_state or SimulationEntities.empty()
         ).freeze()
+        self._entities = self._initial_entities
         self._epoch: Epoch = 0
         if initial_clock.epoch != self._epoch:
             raise ValueError("initial clock epoch must be zero")
@@ -118,6 +119,7 @@ class MutationCoordinator:
                     "local_date": simulation_time.date(),
                     "hour": simulation_time.hour,
                     "epoch": next_epoch,
+                    "status": ClockStatus.PAUSED,
                 }
             )
             SimulationClock.model_validate(candidate_clock.model_dump())
@@ -145,6 +147,13 @@ class MutationCoordinator:
                 clock=self._clock,
                 entities=self._entities,
             )
+
+    def reset(self, simulation_time: VancouverDateTime) -> CoordinatorSnapshot:
+        return self.replace_state(
+            self._initial_entities,
+            simulation_time=simulation_time,
+            expected_epoch=self._epoch,
+        )
 
     def _check_epoch(self, expected_epoch: Epoch | None) -> None:
         if expected_epoch is not None and expected_epoch != self._epoch:

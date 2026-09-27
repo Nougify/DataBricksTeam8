@@ -31,6 +31,24 @@ def test_fixture_filters_window_and_orders_recommendations() -> None:
     ]
 
 
+def test_event_derives_proactive_timing_and_operational_values() -> None:
+    event = FixtureEventSource("test-v1").load_window(START, END).events[0]
+
+    assert event.mode.value == "PROACTIVE"
+    assert event.actionable_at == datetime.fromisoformat("2026-07-10T09:30:00-07:00")
+    assert event.surge_ratio == 2.5
+    assert event.suggested_extra_buses == 2
+    assert event.priority_score == 0.9
+
+
+def test_rejects_availability_after_event_time() -> None:
+    payload = build_fixture_rows("test-v1")[0].model_dump()
+    payload["available_at"] = "2026-07-10T10:01:00-07:00"
+
+    with pytest.raises(ValueError, match="available_at"):
+        DispatchEventRow.model_validate(payload)
+
+
 def test_rows_reject_conflicting_duplicate_recommendation() -> None:
     rows = build_fixture_rows("test-v1")[:2]
     rows[1] = rows[1].model_copy(update={"recommendation_id": "r1"})

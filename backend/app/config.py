@@ -19,7 +19,7 @@ from app.domain.models import DayType
 from app.routing import RoutingProvider
 
 AllowedSimulationSpeed = Literal[1, 60, 300, 900, 3600]
-ApprovalMode = Literal["MANUAL"]
+ApprovalMode = Literal["MANUAL", "AUTOMATIC"]
 NonEmptyString = Annotated[str, StringConstraints(min_length=1)]
 PositiveFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 PositiveInt = Annotated[int, Field(gt=0)]
@@ -58,13 +58,13 @@ class Settings(BaseSettings):
     )
 
     simulation_min_time: Annotated[datetime, AwareDatetime] = datetime.fromisoformat(
-        "2025-11-01T00:00:00-07:00"
+        "2026-07-10T09:00:00-07:00"
     )
     simulation_start_time: Annotated[datetime, AwareDatetime] = datetime.fromisoformat(
-        "2025-12-06T10:00:00-08:00"
+        "2026-07-10T09:00:00-07:00"
     )
     simulation_max_time: Annotated[datetime, AwareDatetime] = datetime.fromisoformat(
-        "2026-08-31T23:00:00-07:00"
+        "2026-07-10T15:00:00-07:00"
     )
     simulation_speed: AllowedSimulationSpeed = 1
     approval_mode: ApprovalMode = "MANUAL"
@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     fleet_size: Annotated[int, Field(ge=0)] = 3
     default_bus_capacity: PositiveInt = 50
     fleet_config_path: Path | None = None
+    max_buses_per_event: PositiveInt = 3
+    hub_aliases: dict[str, str] = Field(default_factory=lambda: {"UBC": "ubc"})
+    route_aliases: dict[str, str] = Field(default_factory=lambda: {"99": "fixture-99"})
 
     routing_provider: RoutingProvider = RoutingProvider.STRAIGHT_LINE
     routing_speed_kph: PositiveFloat = 30

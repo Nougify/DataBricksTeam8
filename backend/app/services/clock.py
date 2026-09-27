@@ -227,10 +227,7 @@ class SimulationClockController:
             clock = self.clock
             if not clock.min_time <= at <= clock.max_time:
                 raise ValueError("seek time must be within simulation bounds")
-            updated = _clock_at(clock, at, status=ClockStatus.PAUSED)
-            self._commit_clock(
-                updated, (_state_event(updated, StateChangeReason.PAUSED),)
-            )
+            updated = self._coordinator.reset(at).clock
             self._anchor = self._time_source.now()
             return updated
 

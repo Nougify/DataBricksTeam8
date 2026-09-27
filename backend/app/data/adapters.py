@@ -93,7 +93,14 @@ class FixtureEventSource:
         self._source_version = source_version
 
     def load_window(self, start: datetime, end: datetime) -> EventWindow:
-        return _window_from_rows(build_fixture_rows(self._source_version), start, end)
+        return _window_from_rows(
+            build_fixture_rows(self._source_version),
+            start,
+            end,
+            source_identity="fixture",
+            source_version=self._source_version,
+            provenance="bundled deterministic fixture",
+        )
 
 
 class ExportedEventSource:
@@ -109,9 +116,20 @@ class ExportedEventSource:
             rows = [DispatchEventRow.model_validate(row) for row in payload]
         except (OSError, UnicodeError, json.JSONDecodeError, ValidationError) as exc:
             raise EventLoadError(f"cannot load exported events: {self._path}") from exc
-        if any(row.source_version != self._source_version for row in rows):
+        if any(
+            row.source_version is not None
+            and row.source_version != self._source_version
+            for row in rows
+        ):
             raise EventLoadError("event source version does not match configuration")
-        return _window_from_rows(rows, start, end)
+        return _window_from_rows(
+            rows,
+            start,
+            end,
+            source_identity=str(self._path),
+            source_version=self._source_version,
+            provenance="versioned exported event file",
+        )
 
 
 class DatabricksEventSource:
@@ -133,10 +151,15 @@ class DatabricksEventSource:
 
     def load_window(self, start: datetime, end: datetime) -> EventWindow:
         statement = (
-            f"SELECT * FROM `{self._catalog}`.`{self._schema}`.`{self._table}` "
+            "SELECT event_id, event_time, available_at, surge_location, "
+            "predicted_people, normal_people, destination, destination_share, "
+            "route, extra_bus_trips_est, priority_score, surge_type, split, "
+            "direction, link, scheduled_trips_that_hour, extra_people_on_route, "
+            "avg_daily_boardings, pct_trips_overcrowded, source_version, generated_at "
+            f"FROM `{self._catalog}`.`{self._schema}`.`{self._table}` "
             "WHERE source_version = :source_version "
             "AND event_time >= :window_start AND event_time < :window_end "
-            "ORDER BY event_time, event_id, priority_score DESC, recommendation_id"
+            "ORDER BY event_time, event_id, priority_score DESC, route, destination"
         )
         try:
             result = self._executor.query(
@@ -152,7 +175,14 @@ class DatabricksEventSource:
             raise EventLoadError("Databricks returned invalid dispatch events") from exc
         except Exception as exc:
             raise EventLoadError("Databricks dispatch event query failed") from exc
-        return _window_from_rows(rows, start, end)
+        return _window_from_rows(
+            rows,
+            start,
+            end,
+            source_identity=f"{self._catalog}.{self._schema}.{self._table}",
+            source_version=self._source_version,
+            provenance="Databricks SQL bounded parameterized query",
+        )
 
 
 class EventLoadError(RuntimeError):
@@ -205,10 +235,23 @@ def build_event_source(
 
 
 def _window_from_rows(
-    rows: list[DispatchEventRow], start: datetime, end: datetime
+    rows: list[DispatchEventRow],
+    start: datetime,
+    end: datetime,
+    *,
+    source_identity: str,
+    source_version: str | None,
+    provenance: str,
 ) -> EventWindow:
     filtered = [row for row in rows if start <= row.event_time < end]
-    return group_event_rows(filtered, start, end)
+    return group_event_rows(
+        filtered,
+        start,
+        end,
+        source_identity=source_identity,
+        source_version=source_version,
+        provenance=provenance,
+    )
 
 
 def _safe_identifier(value: str) -> str:

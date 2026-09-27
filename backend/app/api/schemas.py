@@ -54,7 +54,7 @@ class Clock(ApiSchema):
     status: ClockStatus
     min_time: VancouverDateTime
     max_time: VancouverDateTime
-    approval_mode: Literal["MANUAL"]
+    approval_mode: Literal["MANUAL", "AUTOMATIC"]
     auto_pause_on_proposal: bool
     epoch: Epoch
 

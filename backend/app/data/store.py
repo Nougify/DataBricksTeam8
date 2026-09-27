@@ -3,6 +3,7 @@ from enum import StrEnum
 from threading import RLock
 
 from app.data.adapters import EventSource
+from app.data.models import EventWindow
 from app.data.reader import EventReader
 
 
@@ -54,6 +55,15 @@ class EventWindowStore:
                     "no validated event window is available"
                 ) from exc
             raise
+        with self._lock:
+            self._reader = candidate
+            self._last_error = None
+            self._status = IntegrationStatus.READY
+            return candidate
+
+    def install(self, window: EventWindow) -> EventReader:
+        """Atomically install a fully validated, backend-resolved event window."""
+        candidate = EventReader(window)
         with self._lock:
             self._reader = candidate
             self._last_error = None

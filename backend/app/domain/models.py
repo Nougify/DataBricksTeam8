@@ -283,7 +283,7 @@ class SimulationClock(DomainModel):
     status: ClockStatus
     min_time: VancouverDateTime
     max_time: VancouverDateTime
-    approval_mode: Literal["MANUAL"] = "MANUAL"
+    approval_mode: Literal["MANUAL", "AUTOMATIC"] = "MANUAL"
     auto_pause_on_proposal: bool
     epoch: Epoch
 

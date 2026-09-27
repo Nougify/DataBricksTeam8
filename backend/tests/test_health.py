@@ -56,3 +56,38 @@ def test_fixture_runtime_uses_configured_representative_dates() -> None:
         resolution = runtime.transit.service_date_resolution(date(2025, 12, 6))
         assert resolution.service_date == mapping[DayType.SAT]
         assert runtime.transit.active_service_ids(date(2025, 12, 6)) == {"fixture-mf"}
+
+
+def test_v3_state_hides_future_events_and_initializes_fleet() -> None:
+    with TestClient(create_app(Settings())) as client:
+        initial = client.get("/api/v1/state")
+        seek = client.post(
+            "/api/v1/clock/seek", json={"time": "2026-07-10T09:30:00-07:00"}
+        )
+        activated = client.get("/api/v1/state")
+
+    assert initial.status_code == 200
+    assert len(initial.json()["buses"]) == 3
+    assert initial.json()["dispatch_events"] == []
+    assert seek.status_code == 200
+    assert seek.json()["epoch"] == 1
+    assert [event["id"] for event in activated.json()["dispatch_events"]] == [
+        "valid-event"
+    ]
+
+
+def test_v3_detail_and_route_endpoints() -> None:
+    with TestClient(create_app(Settings())) as client:
+        client.post("/api/v1/clock/seek", json={"time": "2026-07-10T10:00:00-07:00"})
+        event = client.get("/api/v1/dispatch-events/valid-event")
+        bus = client.get("/api/v1/buses/bus-01")
+        routes = client.get("/api/v1/routes", params={"include_shape": True})
+        route = client.get("/api/v1/routes/fixture-99")
+
+    assert event.status_code == 200
+    assert event.json()["recommendations"][0]["route_id"] == "fixture-99"
+    assert bus.status_code == 200
+    assert bus.json()["capacity"] == 50
+    assert routes.status_code == 200
+    assert routes.json()[0]["shape"]["type"] == "LineString"
+    assert route.status_code == 200
