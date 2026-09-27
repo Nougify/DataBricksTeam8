@@ -13,6 +13,7 @@ from app.data.adapters import build_snapshot_source
 from app.data.fixtures import fixture_now
 from app.data.store import SnapshotStore
 from app.errors import install_error_handlers
+from app.routing import build_routing_service
 from app.runtime import RuntimeOwner
 from app.services.clock import (
     SimulationClockController,
@@ -61,10 +62,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         events = InMemoryEventSink()
         coordinator = MutationCoordinator(events, initial_clock(resolved_settings))
         clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
+        routing = build_routing_service(
+            resolved_settings.routing_provider,
+            resolved_settings.routing_speed_kph,
+        )
         application.state.runtime = RuntimeOwner(
             settings=resolved_settings,
             data=data,
             transit=transit,
+            routing=routing,
             coordinator=coordinator,
             clock=clock,
             events=events,

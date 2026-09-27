@@ -6,6 +6,7 @@ from pytest import MonkeyPatch
 
 from app.config import AppEnvironment, DataMode, Settings
 from app.domain.models import DayType
+from app.routing import RoutingProvider
 
 
 def test_settings_have_v2_defaults() -> None:
@@ -20,6 +21,8 @@ def test_settings_have_v2_defaults() -> None:
     assert settings.auto_pause_on_proposal is True
     assert settings.approval_timeout_minutes == 30
     assert settings.data_mode is DataMode.FIXTURE
+    assert settings.routing_provider is RoutingProvider.STRAIGHT_LINE
+    assert settings.routing_speed_kph == 30
 
 
 def test_settings_read_environment(monkeypatch: MonkeyPatch) -> None:
@@ -83,3 +86,9 @@ def test_settings_validate_representative_service_dates() -> None:
                 DayType.SUN_HOL: "2026-10-18",
             }
         )
+
+
+@pytest.mark.parametrize("speed", [0, -1, float("inf"), float("nan")])
+def test_settings_reject_invalid_routing_speed(speed: float) -> None:
+    with pytest.raises(ValidationError):
+        Settings(routing_speed_kph=speed)

@@ -16,11 +16,12 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.domain.models import DayType
+from app.routing import RoutingProvider
 
 AllowedSimulationSpeed = Literal[1, 60, 300, 900, 3600]
 ApprovalMode = Literal["MANUAL"]
 NonEmptyString = Annotated[str, StringConstraints(min_length=1)]
-PositiveFloat = Annotated[float, Field(gt=0)]
+PositiveFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 PositiveInt = Annotated[int, Field(gt=0)]
 UnitWeight = Annotated[float, Field(ge=0, le=1)]
 
@@ -35,10 +36,6 @@ class DataMode(StrEnum):
     DATABRICKS = "databricks"
     EXPORTED_SNAPSHOT = "exported_snapshot"
     FIXTURE = "fixture"
-
-
-class RoutingProvider(StrEnum):
-    STRAIGHT_LINE = "straight_line"
 
 
 class ReturnPolicy(StrEnum):

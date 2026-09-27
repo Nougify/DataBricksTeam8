@@ -9,7 +9,7 @@ replace the old v1 plan and are not a record of completed work.
 
 At this revision:
 
-- Chunks 01 through 06 are complete. The Python 3.13/FastAPI service has typed v2 runtime
+- Chunks 01 through 07 are complete. The Python 3.13/FastAPI service has typed v2 runtime
   configuration, shared REST/WebSocket origin policy, application lifespan
   ownership, consistent error envelopes, locked dependencies, and non-root Docker
   startup. `app/main.py` serves `/healthz`.
@@ -28,13 +28,15 @@ At this revision:
 - Strict GTFS parsing, calendar and exception resolution, representative service
   dates, stable service patterns, >24-hour schedules, route shapes, and hub
   catchment indexes now provide one immutable application-owned transit source.
+- Replaceable routing now returns ordered GeoJSON paths, distance, duration, and
+  explicit approximation provenance through a provider-neutral service contract.
 - The v2 simulation APIs, analytics adapters, and WebSocket are still to be
   implemented. Existing models, coordinator, and clock do not establish v2 completion.
 - Existing hub_pulse analysis can supply several read views, but the hourly
   rolling-origin forecast, trailing baseline, and evaluation artifacts are
   explicit data deliverables, not assumed available.
 
-The next implementation step is **07**. Do not postpone forecast validation until
+The next implementation step is **08**. Do not postpone forecast validation until
 after building the dispatcher.
 
 ## 2. Working rules and completion gates

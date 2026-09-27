@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.domain.models import DayType
 from app.main import create_app
+from app.routing import StraightLineRoutingService
 from app.runtime import RuntimeOwner
 
 
@@ -34,6 +35,8 @@ def test_lifespan_installs_one_application_runtime() -> None:
         assert application.state.runtime is runtime
         assert application.state.runtime.transit is runtime.transit
         assert runtime.transit.feed_version == "fall-2026"
+        assert isinstance(runtime.routing, StraightLineRoutingService)
+        assert runtime.routing.speed_kph == 30
         assert application.state.runtime.coordinator is runtime.coordinator
         assert application.state.runtime.clock is runtime.clock
         assert runtime.clock.clock.status.value == "PAUSED"
