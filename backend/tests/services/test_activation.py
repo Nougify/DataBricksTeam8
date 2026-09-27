@@ -68,12 +68,11 @@ def test_high_speed_jump_activates_events_once_in_canonical_order() -> None:
 
     assert [event.id for event in activated_events(sink)] == [
         "valid-event",
-        "unknown-route",
         "too-many-buses",
         "same-time-a",
         "same-time-b",
     ]
-    assert len(coordinator.snapshot().entities.dispatch_events.list()) == 5
+    assert len(coordinator.snapshot().entities.dispatch_events.list()) == 4
 
 
 def test_seek_rebuilds_only_events_actionable_through_target() -> None:

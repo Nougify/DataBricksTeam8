@@ -28,7 +28,11 @@ UnitWeight = Annotated[float, Field(ge=0, le=1)]
 
 
 def _default_destination_aliases() -> dict[str, tuple[str, ...]]:
-    return {"Downtown": ("ALMA",), "Broadway": ("ALMA",)}
+    return {
+        "Downtown": ("ALMA",),
+        "Broadway": ("ALMA",),
+        "Commercial-Broadway Station": ("ALMA",),
+    }
 
 
 def _default_direction_aliases() -> dict[str, Literal[0, 1]]:
@@ -47,6 +51,11 @@ class DataMode(StrEnum):
     FIXTURE = "fixture"
 
 
+class TransitDataMode(StrEnum):
+    FIXTURE = "fixture"
+    GTFS = "gtfs"
+
+
 class ReturnPolicy(StrEnum):
     HOME = "home"
 
@@ -61,6 +70,7 @@ class Settings(BaseSettings):
     app_env: AppEnvironment = AppEnvironment.DEVELOPMENT
     cors_origins: list[AnyHttpUrl] = Field(
         default_factory=lambda: [
+            AnyHttpUrl("https://transitdemo.dhawal.app"),
             AnyHttpUrl("http://localhost:3001"),
             AnyHttpUrl("http://127.0.0.1:3001"),
         ]
@@ -81,8 +91,10 @@ class Settings(BaseSettings):
     approval_timeout_minutes: PositiveInt = 30
 
     data_mode: DataMode = DataMode.FIXTURE
+    transit_data_mode: TransitDataMode = TransitDataMode.FIXTURE
     data_source_version: NonEmptyString = "development-fixture-v1"
     gtfs_feed_version: NonEmptyString = "fall-2026"
+    recommendation_mappings_path: Path | None = None
     exported_events_path: Path | None = None
     databricks_host: AnyHttpUrl | None = None
     databricks_http_path: NonEmptyString | None = None
@@ -103,7 +115,7 @@ class Settings(BaseSettings):
     fleet_config_path: Path | None = None
     max_buses_per_event: PositiveInt = 3
     hub_aliases: dict[str, str] = Field(default_factory=lambda: {"UBC": "ubc"})
-    route_aliases: dict[str, str] = Field(default_factory=lambda: {"99": "fixture-99"})
+    route_aliases: dict[str, str] = Field(default_factory=dict)
     destination_aliases: dict[str, tuple[str, ...]] = Field(
         default_factory=_default_destination_aliases
     )

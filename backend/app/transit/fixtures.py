@@ -41,6 +41,14 @@ def default_hub_catchments() -> tuple[HubCatchment, ...]:
             catchment_m=300,
             description="North Shore shopping and transit hub",
         ),
+        HubCatchment(
+            hub_id="vancouver-transit-centre",
+            name="Vancouver Transit Centre",
+            location_name="Vancouver Transit Centre",
+            location=GeoPoint(lat=49.2018233, lon=-123.1378145),
+            catchment_m=300,
+            description="TransLink bus depot at 9149 Hudson Street",
+        ),
     )
 
 

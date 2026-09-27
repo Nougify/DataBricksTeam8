@@ -3,20 +3,122 @@
     {
       "id": "bus-01",
       "capacity": 50,
-      "initial_location_id": "ubc",
-      "home_location_id": "ubc"
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
     },
     {
       "id": "bus-02",
       "capacity": 50,
-      "initial_location_id": "ubc",
-      "home_location_id": "ubc"
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
     },
     {
       "id": "bus-03",
       "capacity": 50,
-      "initial_location_id": "waterfront",
-      "home_location_id": "ubc"
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-04",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-05",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-06",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-07",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-08",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-09",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-10",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-11",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-12",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-13",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-14",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-15",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-16",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-17",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-18",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-19",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
+    },
+    {
+      "id": "bus-20",
+      "capacity": 50,
+      "initial_location_id": "vancouver-transit-centre",
+      "home_location_id": "vancouver-transit-centre"
     }
   ]
 }

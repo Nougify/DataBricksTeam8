@@ -8,6 +8,7 @@ import { hubName } from "@/config/hubs";
 import type { AdditionalTrip, DispatchEvent, RouteListItem } from "@/lib/api/schemas";
 import { qk } from "@/lib/api/queryKeys";
 import { fmtIndex, fmtTime } from "@/lib/format";
+import { armAutoResume, disarmAutoResume } from "./autoResume";
 import type { SimEffect } from "./reducer";
 import { useSim } from "./store";
 
@@ -121,6 +122,7 @@ export function handleSimEffects(effects: readonly SimEffect[], ctx: EffectConte
         break;
       }
       case "auto-paused": {
+        armAutoResume();
         if (batchProposed) break;
         if (recentProposal && !recentProposal.paused && now - recentProposal.at <= AUTO_PAUSE_WINDOW_MS) {
           showProposal(recentProposal.trip, true, ctx);
@@ -152,6 +154,7 @@ export function handleSimEffects(effects: readonly SimEffect[], ctx: EffectConte
         for (const id of [...onScreen]) dismiss(id);
         recentProposal = null;
         recentAutoPauseAt = Number.NEGATIVE_INFINITY;
+        disarmAutoResume();
         break;
     }
   }

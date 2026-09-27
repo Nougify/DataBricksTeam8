@@ -4,7 +4,7 @@ import pytest
 from pydantic import AnyHttpUrl, ValidationError
 from pytest import MonkeyPatch
 
-from app.config import AppEnvironment, DataMode, Settings
+from app.config import AppEnvironment, DataMode, Settings, TransitDataMode
 from app.domain.models import DayType
 from app.routing import RoutingProvider
 
@@ -21,6 +21,7 @@ def test_settings_have_v2_defaults() -> None:
     assert settings.auto_pause_on_proposal is True
     assert settings.approval_timeout_minutes == 30
     assert settings.data_mode is DataMode.FIXTURE
+    assert settings.transit_data_mode is TransitDataMode.FIXTURE
     assert settings.routing_provider is RoutingProvider.STRAIGHT_LINE
     assert settings.routing_speed_kph == 30
     assert settings.proactive_lateness_tolerance_seconds == 0
@@ -30,12 +31,14 @@ def test_settings_read_environment(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("CORS_ORIGINS", '["https://example.com"]')
     monkeypatch.setenv("SIMULATION_SPEED", "300")
+    monkeypatch.setenv("TRANSIT_DATA_MODE", "gtfs")
 
     settings = Settings()
 
     assert settings.app_env is AppEnvironment.TEST
     assert settings.cors_origin_strings == ["https://example.com"]
     assert settings.simulation_speed == 300
+    assert settings.transit_data_mode is TransitDataMode.GTFS
 
 
 @pytest.mark.parametrize("speed", [0, 2, 59, 3601])

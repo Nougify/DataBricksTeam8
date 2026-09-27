@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 from math import ceil
 
 from app.config import Settings
@@ -18,6 +18,12 @@ from app.domain.models import (
 )
 from app.domain.types import HubId, ServicePatternId, StopId
 from app.transit.index import TransitDataError, TransitIndex
+from app.transit.mappings import (
+    DispatchPathMapping,
+    dispatch_path_leaves_source,
+    load_recommendation_mappings,
+    mapping_stop_indexes,
+)
 
 
 class RecommendationMapper:
@@ -60,7 +66,14 @@ class RecommendationMapper:
         self._stops_by_name = {
             key: tuple(sorted(values, key=str)) for key, values in grouped_stops.items()
         }
+        self._service_candidate_cache: dict[
+            tuple[date, ServicePatternId, int, int],
+            tuple[RecommendationCandidate, ...],
+        ] = {}
         self._validate_aliases()
+        self._saved_paths = load_recommendation_mappings(
+            settings.recommendation_mappings_path, transit
+        )
 
     def resolve_window(self, window: EventWindow) -> EventWindow:
         return window.model_copy(
@@ -138,6 +151,15 @@ class RecommendationMapper:
                 RecommendationFailureCode.UNKNOWN_HUB,
                 f"unknown source hub: {event.hub_id or event.source_location}",
             )
+        saved_paths = self._saved_paths.get(
+            (hub_id, _normalize(recommendation.source_route))
+        )
+        if saved_paths is not None:
+            saved = self._resolve_saved_recommendation(
+                event, recommendation, saved_paths
+            )
+            if saved.mapping_status is RecommendationMappingStatus.RESOLVED:
+                return saved
         route = self._resolve_route(recommendation)
         if isinstance(route, RecommendationFailureCode):
             reason = (
@@ -146,14 +168,6 @@ class RecommendationMapper:
                 else f"unknown source route: {recommendation.source_route}"
             )
             return _failure(recommendation, route, reason)
-        destination_ids = self._resolve_destination(recommendation.destination)
-        if not destination_ids:
-            return _failure(
-                recommendation,
-                RecommendationFailureCode.UNKNOWN_DESTINATION,
-                f"unknown destination: {recommendation.destination}",
-                route_id=str(route.route_id),
-            )
         direction = self._resolve_direction(event.source.direction)
         if event.source.direction is not None and direction is None:
             return _failure(
@@ -199,19 +213,39 @@ class RecommendationMapper:
                 route_id=str(route.route_id),
             )
 
-        ordered_pairs = tuple(
-            (pattern, source_index, destination_index)
-            for pattern in directed
-            for source_index, stop_time in enumerate(pattern.stops)
-            if stop_time.stop.id in hub_stops
-            for destination_index in range(source_index + 1, len(pattern.stops))
-            if pattern.stops[destination_index].stop.id in destination_ids
-        )
+        destination_ids = self._resolve_destination(recommendation.destination)
+        if destination_ids:
+            ordered_pairs = tuple(
+                (pattern, source_index, destination_index)
+                for pattern in directed
+                for source_index, stop_time in enumerate(pattern.stops)
+                if stop_time.stop.id in hub_stops
+                for destination_index in range(source_index + 1, len(pattern.stops))
+                if pattern.stops[destination_index].stop.id in destination_ids
+            )
+        else:
+            ordered_pairs = tuple(
+                (pattern, source_index, len(pattern.stops) - 1)
+                for pattern in directed
+                for source_index, stop_time in enumerate(pattern.stops)
+                if stop_time.stop.id in hub_stops
+                and source_index < len(pattern.stops) - 1
+                and pattern.stops[-1].stop.id not in hub_stops
+                and dispatch_path_leaves_source(stop_time, pattern.stops[-1])
+            )
         if not ordered_pairs:
+            reason = (
+                f"route {route.route_id} has no terminal downstream of hub"
+                if not destination_ids
+                else (
+                    f"destination {recommendation.destination} "
+                    "is not downstream of hub"
+                )
+            )
             return _failure(
                 recommendation,
                 RecommendationFailureCode.DESTINATION_NOT_ON_ROUTE,
-                f"destination {recommendation.destination} is not downstream of hub",
+                reason,
                 route_id=str(route.route_id),
             )
 
@@ -250,6 +284,71 @@ class RecommendationMapper:
             }
         )
 
+    def _resolve_saved_recommendation(
+        self,
+        event: DispatchEvent,
+        recommendation: EventRecommendation,
+        saved_paths: tuple[tuple[DispatchPathMapping, ServicePattern], ...],
+    ) -> EventRecommendation:
+        direction = self._resolve_direction(event.source.direction)
+        route_id = saved_paths[0][0].route_id
+        if event.source.direction is not None and direction is None:
+            return _failure(
+                recommendation,
+                RecommendationFailureCode.UNKNOWN_DIRECTION,
+                f"unknown direction: {event.source.direction}",
+                route_id=route_id,
+            )
+        directed = tuple(
+            (mapping, pattern)
+            for mapping, pattern in saved_paths
+            if direction is None or pattern.direction_id == direction
+        )
+        if not directed:
+            return _failure(
+                recommendation,
+                RecommendationFailureCode.INCOMPATIBLE_DIRECTION,
+                f"route {route_id} has no saved path for direction {direction}",
+                route_id=route_id,
+            )
+        candidates = tuple(
+            sorted(
+                (
+                    candidate
+                    for mapping, pattern in directed
+                    for source_index, destination_index in (
+                        mapping_stop_indexes(mapping, pattern),
+                    )
+                    for candidate in self._service_candidates(
+                        event, pattern, source_index, destination_index
+                    )
+                ),
+                key=lambda item: (
+                    item.pattern_id,
+                    item.source_stop_id,
+                    item.destination_stop_id,
+                    item.requested_service_date,
+                ),
+            )
+        )
+        if not candidates:
+            return _failure(
+                recommendation,
+                RecommendationFailureCode.NO_SERVICE_ON_DATE,
+                f"route {route_id} has no service on the event date",
+                route_id=route_id,
+            )
+        return EventRecommendation.model_validate(
+            {
+                **recommendation.model_dump(),
+                "route_id": route_id,
+                "mapping_status": RecommendationMappingStatus.RESOLVED,
+                "failure_code": None,
+                "failure_reason": None,
+                "candidates": candidates,
+            }
+        )
+
     def _service_candidates(
         self,
         event: DispatchEvent,
@@ -258,6 +357,15 @@ class RecommendationMapper:
         destination_index: int,
     ) -> tuple[RecommendationCandidate, ...]:
         event_date = event.event_time.date()
+        cache_key = (
+            event_date,
+            ServicePatternId(pattern.id),
+            source_index,
+            destination_index,
+        )
+        cached = self._service_candidate_cache.get(cache_key)
+        if cached is not None:
+            return cached
         candidates: list[RecommendationCandidate] = []
         for requested_date in (event_date - timedelta(days=1), event_date):
             trips = tuple(
@@ -285,7 +393,9 @@ class RecommendationMapper:
                     scheduled_trip_ids=tuple(trip.id for trip in trips),
                 )
             )
-        return tuple(candidates)
+        result = tuple(candidates)
+        self._service_candidate_cache[cache_key] = result
+        return result
 
     def _resolve_hub(self, event: DispatchEvent) -> str | None:
         if event.hub_id is not None:

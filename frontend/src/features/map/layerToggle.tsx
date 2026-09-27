@@ -18,6 +18,11 @@ import { AreaSwatch, BusSwatch, LineSwatch, PointSwatch } from "./swatches";
 const ITEMS: readonly { key: LayerKey; label: string; swatch: ReactNode }[] = [
   { key: "origins", label: "Origins", swatch: <LineSwatch strokeClass="stroke-access-transfer" width={3} casing /> },
   {
+    key: "origin-dots",
+    label: "Origin arcs & dots",
+    swatch: <PointSwatch variant="disc" fillClass="fill-access-transfer/40" strokeClass="stroke-access-transfer" />,
+  },
+  {
     key: "surges",
     label: "Surges",
     swatch: <PointSwatch variant="ring" fillClass="fill-surge-high" strokeClass="stroke-surge-high" />,

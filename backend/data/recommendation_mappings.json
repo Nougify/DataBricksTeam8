@@ -1,0 +1,33 @@
+{
+  "gtfs_feed_version": "fall-2026",
+  "mappings": [
+    {"hub_id":"ubc","route_key":"14","route_id":"16718","pattern_id":"pattern-e754d157c296352bc1e3","source_stop_id":"11793","source_stop_sequence":1,"destination_stop_id":"963","destination_stop_sequence":64},
+    {"hub_id":"ubc","route_key":"25","route_id":"6627","pattern_id":"pattern-64643fe34ffa3b975465","source_stop_id":"12363","source_stop_sequence":1,"destination_stop_id":"11876","destination_stop_sequence":63},
+    {"hub_id":"ubc","route_key":"33","route_id":"11201","pattern_id":"pattern-02326e2fdcbbcfcc1486","source_stop_id":"12358","source_stop_sequence":1,"destination_stop_id":"1832","destination_stop_sequence":46},
+    {"hub_id":"ubc","route_key":"4","route_id":"6614","pattern_id":"pattern-d651c74a73df32767cf3","source_stop_id":"11794","source_stop_sequence":1,"destination_stop_id":"449","destination_stop_sequence":48},
+    {"hub_id":"ubc","route_key":"44","route_id":"6635","pattern_id":"pattern-ba019ebd4c2c10658a13","source_stop_id":"12360","source_stop_sequence":1,"destination_stop_id":"10553","destination_stop_sequence":15},
+    {"hub_id":"ubc","route_key":"49","route_id":"6636","pattern_id":"pattern-95ce9f16040990dd5b24","source_stop_id":"12362","source_stop_sequence":1,"destination_stop_id":"12406","destination_stop_sequence":51},
+    {"hub_id":"ubc","route_key":"84","route_id":"6638","pattern_id":"pattern-f43c523e5c72bc6fae47","source_stop_id":"12359","source_stop_sequence":1,"destination_stop_id":"10196","destination_stop_sequence":20},
+    {"hub_id":"ubc","route_key":"9","route_id":"6619","pattern_id":"pattern-e2463d564450b151f185","source_stop_id":"11792","source_stop_sequence":1,"destination_stop_id":"908","destination_stop_sequence":56},
+    {"hub_id":"ubc","route_key":"99","route_id":"6641","pattern_id":"pattern-1f180e0205eea7cafab4","source_stop_id":"12057","source_stop_sequence":1,"destination_stop_id":"8649","destination_stop_sequence":14},
+    {"hub_id":"ubc","route_key":"R4","route_id":"37810","pattern_id":"pattern-fc7f238dcf14372cba9c","source_stop_id":"12361","source_stop_sequence":1,"destination_stop_id":"1736","destination_stop_sequence":17},
+    {"hub_id":"waterfront","route_key":"14","route_id":"16718","pattern_id":"pattern-719b6a72473a3cb2ec47","source_stop_id":"859","source_stop_sequence":24,"destination_stop_id":"11793","destination_stop_sequence":57},
+    {"hub_id":"waterfront","route_key":"14","route_id":"16718","pattern_id":"pattern-e754d157c296352bc1e3","source_stop_id":"11616","source_stop_sequence":37,"destination_stop_id":"963","destination_stop_sequence":64},
+    {"hub_id":"waterfront","route_key":"16","route_id":"6622","pattern_id":"pattern-c066ba64fa0bb34c7044","source_stop_id":"11616","source_stop_sequence":36,"destination_stop_id":"1065","destination_stop_sequence":77},
+    {"hub_id":"waterfront","route_key":"16","route_id":"6622","pattern_id":"pattern-c877d7999c451c6e69d0","source_stop_id":"859","source_stop_sequence":39,"destination_stop_id":"1018","destination_stop_sequence":74},
+    {"hub_id":"waterfront","route_key":"19","route_id":"6624","pattern_id":"pattern-282254cbfbb9b127e850","source_stop_id":"95","source_stop_sequence":40,"destination_stop_id":"10944","destination_stop_sequence":48},
+    {"hub_id":"waterfront","route_key":"19","route_id":"6624","pattern_id":"pattern-48bbb402d9e881588a74","source_stop_id":"77","source_stop_sequence":9,"destination_stop_id":"1173","destination_stop_sequence":55},
+    {"hub_id":"waterfront","route_key":"20","route_id":"6625","pattern_id":"pattern-4c330fdd40131caa4218","source_stop_id":"11616","source_stop_sequence":5,"destination_stop_id":"11587","destination_stop_sequence":52},
+    {"hub_id":"waterfront","route_key":"209","route_id":"16717","pattern_id":"pattern-713e22de28b351e545ae","source_stop_id":"77","source_stop_sequence":4,"destination_stop_id":"4030","destination_stop_sequence":45},
+    {"hub_id":"waterfront","route_key":"210","route_id":"6672","pattern_id":"pattern-9ed4e4129c46691846f5","source_stop_id":"77","source_stop_sequence":4,"destination_stop_id":"4030","destination_stop_sequence":35},
+    {"hub_id":"waterfront","route_key":"211","route_id":"6673","pattern_id":"pattern-391aa9463a830fe928f5","source_stop_id":"77","source_stop_sequence":4,"destination_stop_id":"4094","destination_stop_sequence":39},
+    {"hub_id":"waterfront","route_key":"22","route_id":"6626","pattern_id":"pattern-06d80b4837f412f1dea2","source_stop_id":"77","source_stop_sequence":3,"destination_stop_id":"1329","destination_stop_sequence":46},
+    {"hub_id":"waterfront","route_key":"4","route_id":"6614","pattern_id":"pattern-1894cef9617db28f39c2","source_stop_id":"95","source_stop_sequence":23,"destination_stop_id":"11794","destination_stop_sequence":54},
+    {"hub_id":"waterfront","route_key":"4","route_id":"6614","pattern_id":"pattern-d651c74a73df32767cf3","source_stop_id":"11616","source_stop_sequence":29,"destination_stop_id":"449","destination_stop_sequence":48},
+    {"hub_id":"waterfront","route_key":"44","route_id":"6635","pattern_id":"pattern-f5b53795c1b173dd5b3b","source_stop_id":"9069","source_stop_sequence":1,"destination_stop_id":"12600","destination_stop_sequence":14},
+    {"hub_id":"waterfront","route_key":"5","route_id":"6615","pattern_id":"pattern-36defe03550c45a2fe9c","source_stop_id":"95","source_stop_sequence":3,"destination_stop_id":"639","destination_stop_sequence":14},
+    {"hub_id":"waterfront","route_key":"7","route_id":"6617","pattern_id":"pattern-80194cf7e8f5ce01b1b5","source_stop_id":"11616","source_stop_sequence":34,"destination_stop_id":"695","destination_stop_sequence":60},
+    {"hub_id":"waterfront","route_key":"7","route_id":"6617","pattern_id":"pattern-a06d92727049c1e99407","source_stop_id":"95","source_stop_sequence":31,"destination_stop_id":"646","destination_stop_sequence":66},
+    {"hub_id":"waterfront","route_key":"R5","route_id":"37807","pattern_id":"pattern-33f80cf488d8330aaddf","source_stop_id":"11438","source_stop_sequence":2,"destination_stop_id":"3129","destination_stop_sequence":16}
+  ]
+}

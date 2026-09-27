@@ -19,6 +19,7 @@ import { arcCoordinates, arcWidth, bubbleRadius } from "../arcs";
 import { dimFactor, usePreviewHubId } from "../dim";
 import { featureCollection } from "../geo";
 import { LegendRow, LineSwatch, PointSwatch } from "../swatches";
+import { useTripPathsShown } from "./TripPathsLayer";
 import type { MapLayerProps } from "./types";
 import type { LineString, Point } from "geojson";
 
@@ -94,6 +95,7 @@ export function OriginArcsLayer({ visible, dimmed, theme }: MapLayerProps) {
   const origins = useMapOrigins();
   const hover = useSim((s) => s.hoverOrigin);
   const previewHubId = usePreviewHubId();
+  const tripPathsShown = useTripPathsShown();
   useOriginPointer();
 
   const data = useMemo(() => {
@@ -116,7 +118,8 @@ export function OriginArcsLayer({ visible, dimmed, theme }: MapLayerProps) {
   }, [origins]);
 
   const factor = dimFactor(dimmed, origins?.hubId === previewHubId);
-  const on = visible && origins !== null;
+  // Bus movement paths take over the map while they're drawn, so the arcs step aside.
+  const on = visible && origins !== null && !tripPathsShown;
   const t = theme.tokens;
   const transfer = t["access-transfer"];
   const oneseat = t["access-oneseat"];
@@ -237,9 +240,16 @@ export function OriginsLegend() {
       <LegendRow swatch={<LineSwatch strokeClass="stroke-access-oneseat" width={2.5} opacity={0.7} />}>
         From an area with a one-seat ride
       </LegendRow>
-      <LegendRow swatch={<PointSwatch variant="disc" fillClass="fill-access-transfer/40" strokeClass="stroke-access-transfer" />}>
-        Origin area; size = pings
-      </LegendRow>
     </>
+  );
+}
+
+export function OriginDotsLegend() {
+  const hubSelected = useSim((s) => s.selectedHubId !== null);
+  if (!hubSelected) return null;
+  return (
+    <LegendRow swatch={<PointSwatch variant="disc" fillClass="fill-access-transfer/40" strokeClass="stroke-access-transfer" />}>
+      Origin area; size = pings
+    </LegendRow>
   );
 }

@@ -14,7 +14,12 @@ from app.domain.models import (
     EventSourceMetadata,
     EventStatus,
 )
-from app.domain.types import NonEmptyText, NonNegativeFloat, VancouverDateTime
+from app.domain.types import (
+    NonEmptyText,
+    NonNegativeFloat,
+    VancouverDateTime,
+    vancouver_now,
+)
 
 
 class DispatchEventRow(DomainModel):
@@ -247,7 +252,7 @@ def group_event_rows(
             source_version=resolved_version,
             window_start=start,
             window_end=end,
-            loaded_at=datetime.now(start.tzinfo),
+            loaded_at=vancouver_now(),
             row_count=len(rows),
             provenance=provenance,
         ),

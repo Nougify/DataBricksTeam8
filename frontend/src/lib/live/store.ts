@@ -7,8 +7,9 @@ import { applyMessages, applySnapshot, emptySim, type SimEffect, type SimSlice }
 export const HUB_TABS = ["now", "origins", "dispatch", "routes", "late-night", "planner", "findings"] as const;
 export type HubTab = (typeof HUB_TABS)[number];
 
-export const LAYER_KEYS = ["origins", "surges", "buses", "routes", "catchments"] as const;
+export const LAYER_KEYS = ["origins", "origin-dots", "surges", "buses", "routes", "catchments"] as const;
 export type LayerKey = (typeof LAYER_KEYS)[number];
+// "origin-dots" (the origin arcs and bubbles) starts off.
 export const DEFAULT_LAYERS: readonly LayerKey[] = ["origins", "surges", "buses", "catchments"];
 
 /** Forecast window in hours (the Now chart's 6 / 12 / 24 h selector; URL param `h`). */

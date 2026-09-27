@@ -177,7 +177,7 @@ def test_seek_atomically_loads_a_window_outside_cached_coverage() -> None:
     assert [
         event.id
         for event in runtime.coordinator.snapshot().entities.dispatch_events.list()
-    ] == ["too-many-buses", "unknown-route", "valid-event"]
+    ] == ["too-many-buses", "valid-event"]
 
 
 def test_failed_window_reload_preserves_state_epoch_and_reader() -> None:

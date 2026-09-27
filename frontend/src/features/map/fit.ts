@@ -6,7 +6,7 @@
 //
 //   network            → METRO_BOUNDS (the three hubs and the eastern origins)
 //   hub selected       → the hub (+ its origins with share ≥ 2% from milestone 2; see camera.tsx)
-//   preview (M3)       → the trip's deadhead and service paths and both routes
+//   trip preview       → the trip's deadhead, service and return paths (camera.tsx)
 import { useEffect, useRef, useState } from "react";
 import { useMap } from "react-map-gl/maplibre";
 import type { PaddingOptions } from "maplibre-gl";

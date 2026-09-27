@@ -50,12 +50,12 @@ export function Console() {
   useEscapeToClear(isTablet && drawerOpen ? closeDrawer : undefined);
 
   return (
-    <div className="flex min-h-dvh flex-1 flex-col overflow-x-clip md:h-dvh md:min-h-0 md:flex-none md:overflow-hidden">
+    <div className="flex min-h-dvh flex-1 flex-col overflow-x-clip md:h-dvh md:max-h-dvh md:min-h-0 md:flex-none md:overflow-hidden">
       <TopBar />
      <GlobalBanners /> 
 
-     <div className="relative flex flex-col md:min-h-0 md:flex-1 md:flex-row"> 
-        <section aria-label="Map" className="relative h-[45svh] min-h-[200px] shrink-0 overflow-hidden md:h-auto md:min-w-0 md:flex-1"> 
+     <div className="relative flex flex-col md:h-0 md:min-h-0 md:flex-1 md:flex-row md:overflow-hidden"> 
+        <section aria-label="Map" className="relative h-[45svh] min-h-[200px] shrink-0 overflow-hidden md:h-auto md:min-h-0 md:min-w-0 md:flex-1"> 
           <ConsoleMap />
           {isTablet && !drawerOpen && (
             <Button
