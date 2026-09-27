@@ -1,541 +1,367 @@
-# Hub Pulse Backend Implementation Plan — v2
+# Surge Bus Backend Implementation Plan
 
-This plan implements [`SPEC.md`](SPEC.md) v2.0 in dependency-ordered, reviewable
-chunks. The spec is authoritative for schemas and behavior; this document defines
-delivery order, dependencies, verification, and completion gates. Chunk numbers
-replace the old v1 plan and are not a record of completed work.
+This plan implements `backend/SPEC.md` v3.0. It replaces the former multi-table
+forecast snapshot plan with one bounded Databricks dispatch-event query and a
+backend-owned simulated fleet.
 
-## 1. Starting point
+## 1. Starting Point
 
-At this revision:
+Reusable implementation already present:
 
-- Chunks 01 through 07 are complete. The Python 3.13/FastAPI service has typed v2 runtime
-  configuration, shared REST/WebSocket origin policy, application lifespan
-  ownership, consistent error envelopes, locked dependencies, and non-root Docker
-  startup. `app/main.py` serves `/healthz`.
-- The canonical v2 domain primitives, immutable schedules, internal dispatch
-  metadata, public read schemas, and entity serializers are defined and tested.
-- Typed, versioned data readers now sit behind validated fixture, exported-snapshot,
-  and prepared parameterized Databricks adapters. Snapshot refresh is atomic,
-  leakage-sensitive caches include version/as-of inputs, and failed refreshes retain
-  the prior valid snapshot without fixture fallback.
-- Deterministic repositories, one application-owned mutation coordinator, atomic
-  cross-entity validation and rollback, typed v2 events, and process-local epoch
-  and sequence ownership now provide the authoritative simulation mutation core.
-- The bounded event-driven clock uses monotonic production time and deterministic
-  fake time, processes prioritized semantic boundaries without skipping, and owns
-  clock/entity/event commits atomically through the mutation coordinator.
-- Strict GTFS parsing, calendar and exception resolution, representative service
-  dates, stable service patterns, >24-hour schedules, route shapes, and hub
-  catchment indexes now provide one immutable application-owned transit source.
-- Replaceable routing now returns ordered GeoJSON paths, distance, duration, and
-  explicit approximation provenance through a provider-neutral service contract.
-- The v2 simulation APIs, analytics adapters, and WebSocket are still to be
-  implemented. Existing models, coordinator, and clock do not establish v2 completion.
-- Existing hub_pulse analysis can supply several read views, but the hourly
-  rolling-origin forecast, trailing baseline, and evaluation artifacts are
-  explicit data deliverables, not assumed available.
+- FastAPI service, settings validation, CORS, health, and Docker baseline.
+- Immutable domain-model conventions and Vancouver timestamp validation.
+- Coordinator, repositories, event sequencing, and bounded clock foundations.
+- GTFS parsing/index structures and replaceable routing foundations.
+- Explicit fixture/export/Databricks source-mode patterns and atomic store ideas.
 
-The next implementation step is **08**. Do not postpone forecast validation until
-after building the dispatcher.
+Superseded implementation that must be migrated before feature work continues:
 
-## 2. Working rules and completion gates
+- `DataSnapshot` and its forecast, actual, baseline, origin, route-load,
+  analytical-record, and evaluation collections.
+- The eleven-query `DatabricksSnapshotAdapter`.
+- Forecast-vintage readers and fixture assumptions.
+- Clock boundaries and future APIs based on hourly forecasts or observed demand.
 
-- Keep each chunk focused, runnable, and independently reviewable. Honor its
-  prerequisites; an explicit fixture can substitute for an external artifact
-  during development, not for the real-data completion gate.
-- Keep domain behavior in services/domain code, API serialization in dedicated
-  schemas, and source-specific logic at integration boundaries.
-- Use deterministic fixtures, pinned source versions, and a fake simulation
-  clock. Tests must not sleep to advance time or require shared workspace access.
-- Maintain one application-owned mutation coordinator. Approval, expiry, seek,
-  reservations, and snapshot/event ordering must share that authority.
-- Implement only v2 public states/events. Do not build automatic dispatch or
-  v1 start/reset endpoints and plan to retrofit approval and seek later.
-- The frontend target is port 3001 with configurable REST/WebSocket URLs and
-  allowed origins. Do not add compatibility routes without a concrete consumer.
-- No silent fixture fallback, invented backtest metrics, future-observation
-  leakage, or implicit conversion of pings to passengers.
-- For Databricks execution, follow repository skill guidance, ask which CLI
-  profile to use, and pass it explicitly. Use serverless-compatible pipelines;
-  do not overwrite shared tables/notebooks or run a shared notebook's Run All
-  without checking with the team.
-- For implementation chunks, run from `backend`:
+The next implementation step is **01 - Event contract migration**. Do not build
+additional forecast/origin/analytics endpoints against the superseded contract.
 
-  ```sh
-  uv run ruff check .
-  uv run ruff format --check .
-  uv run mypy --strict app tests
-  uv run pytest
-  ```
+## 2. Working Rules
 
-  Run relevant pipeline checks for data chunks and Docker/OpenAPI checks where
-  specified. Documentation-only edits need documentation/diff checks.
-- Record a chunk complete only after its tests and acceptance condition pass.
-  If a schema/product decision blocks it, record the blocker rather than
-  returning placeholder success responses.
+- Complete chunks in dependency order.
+- A real Databricks event feed or versioned export of that same feed is required
+  for delivery; fixtures prove mechanics only.
+- Query Databricks with bound time-window parameters. Never query once per tick.
+- Do not use an event before `available_at ?? event_time`.
+- Do not silently fall back to fixtures after external-source failure.
+- Install query results and seek results atomically; retain prior valid state on
+  failure.
+- Databricks never owns buses, reservations, dispatch state, or movement.
+- GTFS and configured fleet data are authoritative for backend feasibility.
+- A recommendation that cannot be mapped fails visibly rather than being replaced
+  by invented data.
+- Keep one coordinator authority for clock and all runtime mutations.
+- Update schemas, fixtures, tests, `SPEC.md`, and this plan together when the
+  contract changes.
+- For Databricks operations, ask which CLI profile to use and pass it explicitly.
+
+Each chunk is complete only when code, tests, typing, formatting, and relevant
+documentation pass. Required checks are:
+
+```text
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy --strict app tests
+uv run pytest
+```
 
 ## 3. Dependencies
 
-Dependencies below are direct prerequisites; their dependencies are transitive.
-Independent workstreams may proceed concurrently once prerequisites are met.
-This does not require parallel agents or concurrent edits to shared notebooks.
-
-| Chunk | Prerequisites | Deliverable |
-|---|---|---|
-| 01 | Existing scaffold | Runtime/configuration alignment |
-| 02 | 01 | V2 domain and canonical API schemas |
-| 03 | 02 | Versioned data interfaces and explicit fixtures |
-| 04 | 02 | Repositories, mutation coordinator, event sequencing |
-| 05 | 04 | Bounded event-driven clock |
-| 06 | 02 | GTFS parsing and transit index |
-| 07 | 02 | Deadhead/return routing abstraction |
-| 08 | 03, 06 | Fleet, route loads, and capacity evidence |
-| 09 | 03, 05 | As-of demand and surge detection |
-| 10 | 06, 07, 08, 09 | Feasible route/departure candidates |
-| 11 | 04, 10 | Atomic proposals and reservations |
-| 12 | 05, 11 | Approval, rejection, expiry, alternatives |
-| 13 | 07, 12 | Movement and bus return lifecycle |
-| 14 | 09, 13 | Deterministic atomic seek |
-| 15 | 08, 14 | Canonical core REST API and snapshots |
-| 16 | 15 | WebSocket transport and resynchronization |
-| 17 | 09, 15 | Forecast, origins, and hub status reads |
-| 18 | 06, 08, 15 | Routes, loads, and map geometry |
-| 19 | 03, 17 | Timeline, profile, and late-night views |
-| 20 | 03, 15 | Remaining findings and proof views |
-| 21 | 16, 17, 18, 19, 20 | Real-data integration and readiness |
-| 22 | 21 | Reproducible demo, CI, and delivery acceptance |
-
-Backend chunks can use explicit fixtures during development, but Checkpoint C and
-chunk 21 require real data. Prepare adapter implementations in 03 and validate
-each real artifact as it arrives; 21 is the integration gate, not the first time
-anyone attempts Databricks ingestion.
-
-## 4. Foundation and data contracts
-
-### 01 — Align the existing service and runtime configuration
-
-**Scope:** SPEC sections 2, 3, 11.
-
-- Verify the existing FastAPI/uv/Docker scaffold and health routes; retain its
-  working structure rather than recreating a Node-to-Python migration.
-- Replace single `FRONTEND_ORIGIN` assumptions with typed `CORS_ORIGINS`, defaulting
-  to both localhost and 127.0.0.1 on port 3001. Add REST CORS middleware and a
-  reusable WebSocket origin validator for chunk 16.
-- Add typed configuration for replay bounds/start, allowed speeds, manual
-  approval, auto-pause, timeout, data mode, and pinned source versions. Add fleet,
-  routing, and dispatch settings alongside their owning later chunks.
-- Establish single-worker application lifespan ownership and consistent error
-  envelopes, including FastAPI validation errors.
-
-**Verify:** health contract, invalid settings, allowed/denied REST origins,
-error envelopes, non-root container startup, and locked dependency installation.
-**Done when:** the service boots with v2 defaults and the existing checks pass.
-
-### 02 — Migrate domain primitives and define canonical read schemas
-
-**Scope:** SPEC sections 3, 5, 6.3, 13.1.
-
-- Evolve existing typed IDs, geography, service patterns, and immutable schedules.
-  Add hub IDs, forecast vintage/bucket types, RouteRef, Clock, HubStatus, Surge,
-  Bus, AdditionalTrip, and the explicit TripDetail extension.
-- Add proposal/reservation states and links, surge windows/phases/multiple trips,
-  origin shares, load evidence, timing, capacity, and replacement relationships.
-- Preserve internal home locations, selected patterns, ordered stops, candidate
-  scores, and failure reasons separately from the public DTOs.
-- Define a single serializer per canonical entity for later REST/events. Define
-  analytic DTOs with their owning endpoint chunks using these same primitives.
-- Encode explicit nullability, Vancouver timestamps, offset-bearing bucket keys,
-  valid shapes, load percentages above 100, and progress on the 0–1 scale.
-
-**Verify:** v2 objects and state invariants, nullable destinations, multiple trip
-links, timestamp/coordinate errors, load units, and exact serialized fields.
-**Done when:** reusable v2 models pass tests without v1 public enum/field leakage.
-
-### 03 — Versioned data interfaces, adapters, and fixture mode
-
-**Scope:** SPEC sections 4, 11.
-
-- Define typed read interfaces for forecast vintages, actuals, trailing baselines,
-  origins, dimensions, route loads, retrospective views, and evaluation artifacts.
-- Implement explicit fixture and exported-snapshot adapters; prepare parameterized
-  Databricks queries/schema mappings behind the same interfaces.
-- Validate timestamps, vintage keys, intervals, training cutoffs, provenance,
-  freshness, and usable coverage before installing a snapshot.
-- Key caches by source/model version and as-of/vintage parameters. Keep source
-  credentials server-side and snapshot installation atomic.
-- Build a small deterministic fixture with a surge, ordinary hours, missing data,
-  multiple origins, and representative route load evidence. Label fixture mode.
-
-**Verify:** malformed/duplicate data, no available artifact, as-of cache isolation,
-mode selection, integration failure retaining the prior snapshot, and no fallback.
-**Done when:** backend consumers can use typed data without direct SQL knowledge.
-
-## 5. Authoritative simulation core
-
-### 04 — Repositories, mutation coordinator, and event sequencing
-
-**Scope:** SPEC sections 2, 7, 10.
-
-- Add deterministic in-memory repositories for buses, surges, trips, and decisions.
-- Coordinate multi-entity commits, conflict checks, snapshot reads, and eventual
-  seek swaps through one application-owned authority.
-- Define typed internal v2 events, process-local seq/epoch ownership, and an
-  event sink abstraction. Commit before publishing; allocate snapshot last_seq
-  consistently with all committed events represented in the snapshot.
-- Support staged state construction and failure rollback without partial writes.
-
-**Verify:** concurrent mutations, stable ordering, rollback, one bus reservation,
-atomic snapshots, increasing sequences, and no events for failed transactions.
-**Done when:** later services cannot bypass atomic updates or event ordering.
-
-### 05 — Bounded event-driven simulation clock
-
-**Scope:** SPEC section 6.4.
-
-- Add production/fake clocks, PAUSED startup, MANUAL approval, exact allowed
-  speeds, pause/resume/settings, and configurable min/max bounds.
-- Build chronological event-boundary stepping and hooks for issuances, proposal
-  auto-pause, expiry, movement, and hourly demand. Later chunks register handlers.
-- Stop at max_time; preserve time on pause. Keep wall-clock dependencies inside
-  the production clock and provide test control of elapsed time.
-
-**Verify:** 1–3600x stepping, unsupported speeds, idempotent controls, max bound,
-pause freezing, DST elapsed-time behavior, and stopping at a registered boundary.
-**Done when:** large steps cannot skip semantic boundaries; no start/reset API
-or public STOPPED state is introduced.
-
-### 06 — GTFS parsing, patterns, and transit index
-
-**Scope:** SPEC sections 6.1, 8.
-
-- Load the pinned GTFS files, calendars/exceptions, >24-hour service times,
-  directions, shapes, and ordered stop-time templates.
-- Preserve GTFS route IDs and map line keys/colors/modes and hub catchments.
-  Index all supported display modes, with Bus-only dispatch eligibility.
-- Implement explicit representative service-day mapping when replay dates are
-  outside feed coverage; retain and disclose its provenance.
-- Build immutable route/pattern/stop/departure lookups with deterministic IDs.
-
-**Verify:** direction variants, calendars, midnight/service-day boundaries,
-representative mapping, missing files, immutable records, and route identity.
-**Done when:** services query transit patterns without parsing GTFS themselves.
-
-### 07 — Replaceable deadhead and return routing
-
-**Scope:** SPEC section 6.5.
-
-- Implement RoutingService returning path, distance, and duration; initial routing
-  may use a labeled straight-line approximation and configurable positive speed.
-- Keep geometry order and units consistent, handle coincident endpoints, and
-  expose provider/approximation provenance for evidence and demo labels.
-
-**Verify:** distance sanity, timing, invalid coordinates/speed, identical points,
-and valid nonempty GeoJSON paths.
-**Done when:** switching providers does not require changes to dispatch logic.
-
-### 08 — Fleet configuration, route loads, and capacity evidence
-
-**Scope:** SPEC sections 6.2–6.3, 9.8, 11.
-
-- Validate depot/route-sourced fleet definitions, capacity, starting/home locations,
-  and donor eligibility against transit/data references.
-- Provide deterministic initial fleet construction for startup and seek.
-- Map TSPR day-type/period loads with TSPR_2025_TYPICAL basis. Implement shared
-  thresholds and null behavior; low load alone must not create spare buses.
-- Define/version the recipient and donor before/after capacity calculation before
-  claiming load reductions. Missing inputs yield explicit nulls and explanation.
-- Produce forecast/load evidence structures consumed by proposal assembly.
-
-**Verify:** source discriminators, no inferred vehicles, above-100% loads, missing
-statistics, capacity accounting, and stable fleet construction.
-**Done when:** proposals can identify where a real configured simulated bus comes
-from and substantiate its capacity impact. Real fleet configuration is a team gate.
-
-### 09 — As-of demand, origins, and surge detection
-
-**Scope:** SPEC sections 4, 5.1, 6.2.
-
-- Select forecast vintages available by the captured simulation time. Implement
-  stable surge-window grouping/identity and revision deduplication.
-- Attach baseline, peak-hour magnitude, origin shares, drivers known at issuance,
-  and deterministic severity/lead time. Preserve selected target/vintage internally.
-- Advance UPCOMING/ACTIVE/RESOLVED phases and reveal actuals only after resolution,
-  for the same target hour used in the forecast magnitude.
-- Build shared demand queries with current-hour masking, sample/null handling,
-  and no future origin/baseline reads. Add hourly boundary callbacks to 05.
-
-**Verify:** exact boundaries, duplicate/revised vintages, no future leakage,
-peak-hour ties, empty destinations, missing actuals, and non-hub default exclusion.
-**Done when:** an explicit fixture or real adapter can drive truthful hub demand
-and eligible surges without using retrospective indexes for detection.
-
-### 10 — Route matching and feasible departure candidates
-
-**Scope:** SPEC sections 6.1–6.2.
-
-- Match boarding and later destination stops; require evidence for transfer
-  connections rather than treating a regional centroid as a direct destination.
-- Score normalized proximity, destination shares, schedule gap, and deadhead
-  components with configured weights and stable route/pattern/bus ties.
-- Choose a departure near the surge start with separation from scheduled and
-  committed additional trips. Document missing-adjacent-service policy.
-- Consider AVAILABLE buses only; enforce arrival before departure and strictly
-  before the surge. Require a positive approval window before dispatch.
-- Return typed candidates and precise failure reasons without mutating state.
-
-**Verify:** reverse-direction rejection, radius limits, weighted coverage, schedule
-gaps, competing departures, unreachable buses, ties, and deadline equality.
-**Done when:** a deterministic feasible plan includes paths, all four movement
-times, capacity evidence, and internal decision scores.
-
-### 11 — Atomic proposals and reservations
-
-**Scope:** SPEC sections 5, 6.2–6.3.
-
-- Assemble canonical PROPOSED trips with rationale/evidence, reserve buses, and
-  link surges in one commit. Publish trip/bus/surge events in defined order.
-- Support capped multiple trips per surge, accounting for existing commitments.
-  Do not derive bus counts by interpreting pings as passengers.
-- Enforce stable proposal identity on repeated ingestion and map precise internal
-  failure reasons to public v2 statuses. Implement surge status precedence.
-
-**Verify:** competing proposals, multi-trip links, no double reservation, caps,
-duplicate input, no partial state/events, and public failure-state mapping.
-**Done when:** the engine proposes and reserves but cannot move an unapproved bus.
-
-### 12 — Human decisions, expiry, and alternative proposals
-
-**Scope:** SPEC sections 6.3, 7.
-
-- Serialize approve/reject with expiry; require matching epoch before looking up
-  state conflicts, and expire at equality before processing approval.
-- Default expiry to min(proposed_at + 30 minutes, dispatch_time). Pause freezes it.
-- Keep approved future buses RESERVED with assigned rather than proposed links.
-  Implement idempotent APPROVED approval without duplicate events.
-- Release rejected/expired reservations, retain rationale/audit, and produce
-  bounded distinct alternatives with replaces_trip_id. Add cancellation of
-  approved pre-service trips; movement consequences are completed in 13.
-- Register auto-pause on newly proposed trips at the exact simulated instant.
-
-**Verify:** approve/expiry races, double clicks, stale epochs, rejection conflicts,
-alternative exhaustion, link transitions, cancellation, and 3600x auto-pause.
-**Done when:** no lifecycle bypass can dispatch before human approval.
-
-### 13 — Movement, service, and return lifecycle
-
-**Scope:** SPEC sections 6.3–6.5.
-
-- Start deadhead at dispatch_time, wait after arrival, run shifted GTFS timing
-  after departure, and mark service completion independently of bus return.
-- Interpolate location/heading and normalized service progress; derive current
-  and next stops for TripDetail.
-- Return completed/cancelled moved buses home before clearing assignments;
-  unmoved cancellation releases immediately. In-service trips finish.
-- Register all boundaries with 05, generate canonical events, and expose a
-  telemetry sampling hook without making movement depend on broadcast cadence.
-
-**Verify:** deferred movement, zero-duration waiting, identical path points,
-large jumps, heading/progress, completion, cancellation return, and final cleanup.
-**Done when:** approval can run a full service/return cycle using a fake clock.
-
-### 14 — Atomic deterministic seek
-
-**Scope:** SPEC section 6.4.
-
-- Build a replacement state at T from pinned data/configuration, reset buses,
-  discard user decisions, and recreate not-ended surges detected by T.
-- Repropose feasible UPCOMING windows with proposed_at = T and a fresh valid
-  deadline. Never give an active window a new pre-surge proposal.
-- Preserve speed/status/settings; suppress reconstruction auto-pause and creation
-  event floods. Swap once, increment epoch once, and emit state.reset.
-- Keep original state on invalid range, missing data, or construction failure.
-  Reuse the pure builder for non-current hub status reads without committing it.
-
-**Verify:** same-T domain equality excluding epoch/seq, backward/forward seek,
-discarded decisions, failed rebuild rollback, racing approval, and running seek.
-**Done when:** seek is reproducible for any supported T, not just the start preset.
-
-## 6. Frontend-facing interfaces
-
-### 15 — Core REST, metadata, and atomic snapshots
-
-**Scope:** SPEC sections 7, 9.1–9.2, 11.
-
-- Expose `/meta`, `/hubs`, `/state`, `/surges`, `/buses`, `/additional-trips`,
-  `/additional-trips/{trip_id}`, and `/simulation` under `/api/v1`.
-- Add time/speed/settings PUTs, pause/resume POSTs, and approve/reject POSTs with
-  exact response objects, filters, error codes, and nullable stale-conflict trip.
-- Build snapshots atomically with epoch/last_seq. Share canonical serializers
-  with mutation responses and the event payloads already produced by services.
-- Publish actual bounds/configuration/provenance in meta, and `/readyz` component
-  health. Keep suggested presets disabled or omitted until verified.
-- Generate OpenAPI and contract fixtures for frontend integration.
-
-**Verify:** every core endpoint, filters, errors, explicit nulls, cross-endpoint
-entity equality, TripDetail extension, atomic watermark, and valid presets.
-**Done when:** the UI can inspect/control a fixture-backed manual simulation using
-the v2 contract; this is not yet a real-data demo completion claim.
-
-### 16 — WebSocket transport and client resynchronization
-
-**Scope:** SPEC section 10.
-
-- Expose `/api/v1/ws/simulation` with allowed-origin validation and the complete
-  typed event vocabulary, seq, epoch, simulation_time, and canonical upserts.
-- Batch positions and limit ticks/positions to 4/s wall time; coalesce progress
-  telemetry without dropping lifecycle or hourly transitions.
-- Isolate slow/disconnected clients from simulation; require reconnect/refetch
-  rather than a server replay buffer.
-- Verify connect-buffer-snapshot ordering, filtering by watermark/epoch, reset
-  during refetch, and fresh counter baselines after server restart.
-
-**Verify:** bootstrap race, seek while fetching, event ordering, idempotent event
-suppression, telemetry limits, multiple clients, and connection cleanup.
-**Done when:** the UI reconstructs consistent state after reconnect and seek.
-
-### 17 — Operational hub status, forecast, and origins reads
-
-**Scope:** SPEC sections 9.3–9.5.
-
-- Add `/hubs/{hub_id}/status`, `/forecast`, and `/origins` with captured/default at,
-  range validation, and shared demand service semantics.
-- Return HISTORY/CURRENT/FORECAST rows with exact requested historical vintage,
-  latest available future issuance, offset-bearing time, and hour_complete.
-- Mask partial actuals; preserve null missing vintages and unavailable-source
-  errors. Never substitute a more informed forecast for a missing historic one.
-- Return all 36 origins, correct regional denominators, null remote centroids,
-  direct line keys, and low_sample behavior. Support actual/typical bases.
-- Assemble live HubStatus counts/next surge; historical at uses the pure builder.
-
-**Verify:** boundaries, DST buckets, forecast horizons/history limits, zero versus
-missing input, source granularity, and REST/state/hourly-event HubStatus equality.
-**Done when:** forecast and origin charts are supported without future actuals.
-
-### 18 — Routes, loads, and map geometry
-
-**Scope:** SPEC sections 8, 9.8.
-
-- Expose `/routes`, `/routes/load`, and `/routes/{route_id}`; register load before
-  the route-ID handler. Reuse shared load and configured fleet services.
-- Support hub filtering, optional simplified LineString/MultiLineString shapes,
-  null unrequested geometry, and full RouteRef fields.
-- Implement dated departure windows, midnight crossing, hub catchment stop IDs,
-  and disclosed representative schedules. Preserve internal pattern detail.
-
-**Verify:** route ID named load handling, shape size, no disconnected joins,
-explicit/default windows, >24-hour departures, and available spare counts.
-**Done when:** maps and need-versus-spare views use traceable transit/load data.
-
-### 19 — Timeline, hourly profile, and late-night views
-
-**Scope:** SPEC sections 9.6, 9.9–9.10.
-
-- Add `/timeline`, hub `/hourly-profile`, and hub `/late-night` through existing
-  gold/query logic mapped to exact v2 response models.
-- Label centered daily indexes as retrospective and keep them out of runtime
-  surge decisions. Zero-fill valid profiles to exactly 24 typical hours.
-- Select current/next night, preserve DST instant buckets, mask incomplete/future
-  actuals, and compute daily-share denominators from as-of actuals/forecasts.
-- Keep top_nights explicitly retrospective; missing forecast coverage yields
-  null shares rather than future observed totals. Label typical GTFS supply.
-
-**Verify:** 05:00 rollover, DST nights, missing denominators, zero total, valid
-profile zero-fill versus absent artifacts, and retrospective labeling/isolation.
-**Done when:** priority-two planning and timeline panels have truthful data.
-
-### 20 — Events, findings, recommendations, and model proof reads
-
-**Scope:** SPEC sections 9.7, 9.11–9.16.
-
-- Add `/events`, hub `/overview`, `/route-crowding`, `/recommendations`, plus
-  `/findings`, `/backtest`, and `/validation` with explicit response schemas.
-- Preserve per-KPI source/period, crowding sort/null rules, valid unambiguous
-  recommendation seek links, and versioned scenarios.ts findings.
-- Implement curated event ingestion with source URLs/known-at metadata; empty
-  results are valid until curation is supplied.
-- Serve evaluation artifacts through 03, returning BACKTEST_UNAVAILABLE when
-  absent. Return computed validation profiles/correlations, not draft constants.
-
-**Verify:** endpoint schemas, deterministic ordering, evidence periods, seek-link
-bounds, event overlap/filtering, and missing-artifact errors. Fixture tests do not
-certify real metrics.
-**Done when:** remaining panels and proof APIs expose the prescribed contracts.
-
-## 7. Integration, rollout, and acceptance
-
-### 21 — Real-data integration and readiness gate
-
-**Scope:** SPEC sections 4, 11, 13.3.
-
-- Load actuals, origins, baselines, forecast vintages, evaluation outputs, and
-  existing gold outputs through the adapters; pin the snapshot, GTFS mapping,
-  model version, evaluation period, and configured real demo fleet.
-- Validate table/schema mappings, all analytical queries, coverage, and source
-  attribution. Distinguish optional missing analytics from simulation blockers.
-- Select actual usable bounds and verified demo presets that produce feasible
-  proposals with the chosen model/fleet. Refresh meta from those artifacts.
-- Exercise provider loss: retain cached coverage, expose degraded health, return
-  explicit missing-data errors, and roll back failed seeks without state loss.
-
-**Verify:** a real historical forecast drives a proposal, all required panels use
-real/versioned artifacts, no mock fallback occurs, and evaluation is reproducible.
-**Done when:** the full simulation and analytics run with real exported or live
-Databricks-backed inputs. A cached exported snapshot is valid real data, not a mock.
-
-### 22 — Reproducible demo, CI, and final acceptance
-
-**Scope:** SPEC sections 11–12.
-
-- Automate the end-to-end scenario: paused startup, forecast/origins, proposal
-  auto-pause, preview, rejection/alternative, approval, deferred deadhead, service,
-  return, actual resolution, seek, reconnect, and scorecard.
-- Retain a small explicit offline fixture test suite as well as instructions for
-  reproducing the real snapshot/demo. Document commands, versions, and setup.
-- Finish structured logs, graceful shutdown, readiness, source attribution,
-  single-worker deployment, and HTTPS/WSS configuration if hosting is selected.
-- Add CI for lint/format/strict typing/tests, Docker build, and OpenAPI breaking
-  change checks. Confirm the frontend mocks/client incorporate SPEC 13.2 changes.
-
-**Done when:** SPEC 12.2 is reproducible, required checks pass, a fresh developer
-can run the demo, and the team can trace every displayed recommendation/metric
-to its source artifact and method.
-
-## 8. Checkpoints and scope control
+```text
+01 Event contract migration
+  |
+  +--> 02 Filtered event adapters and cache
+  |      |
+  |      +--> 03 Event repository, activation, and clock boundaries
+  |              |
+  04 GTFS recommendation mapping ----------------+
+  05 Backend fleet configuration ----------------+--> 06 Proposal and approval
+  07 Routing and movement foundations -----------+          |
+                                                            v
+                                                    08 Movement lifecycle
+                                                            |
+  02 + 03 + 06 + 08 --------------------------------------> 09 Deterministic seek
+                                                            |
+                                                    10 REST and WebSocket
+                                                            |
+                                                    11 Real-data gate
+                                                            |
+                                                    12 Demo acceptance
+```
+
+Chunks 04 and 07 adapt existing GTFS/routing work and can proceed in parallel with
+02 after the canonical event model in 01 is fixed. Only one chunk should be marked
+in progress in the tracked task list at a time.
+
+## 4. Contract And Data Source
+
+### 01 - Event Contract Migration
+
+**Scope:** SPEC sections 3-5 and 10.
+
+- Add canonical `DispatchEvent`, `EventRecommendation`, and event-source metadata.
+- Represent `event_time`, optional `available_at`, derived `actionable_at`, and
+  reactive/proactive mode.
+- Represent predicted/normal people, suggested buses, priority, source hub, route,
+  destination, shares, and optional evidence.
+- Link proposals and trips by `dispatch_event_id` instead of forecast-derived
+  surge identity.
+- Replace snapshot-oriented settings with event-source mode, table/view identity,
+  query-window, mapping, and source-version settings.
+- Remove mandatory forecast, actual, baseline, origin, route-load, analytical, and
+  evaluation models from the operational import path.
+- Keep hub geometry, GTFS, fleet, routing, and runtime entities backend-owned.
+
+**Verify:** strict row validation, timestamp offsets, `available_at <= event_time`,
+fraction/percentage policy, suggested-bus rounding, duplicate keys, and canonical
+serialization.
+
+**Done when:** the code has one canonical event model matching SPEC v3 and no core
+runtime interface requires the former `DataSnapshot`.
+
+### 02 - Filtered Event Adapters And Cache
+
+**Depends on:** 01.
+
+- Define an `EventSource.load_window(start, end)` protocol.
+- Implement explicit fixture, exported-event, and Databricks adapters.
+- Use one fixed parameterized query against a validated configured table/view.
+- Map the current Databricks fields into canonical events and group rows by
+  `event_id`.
+- Require rows in one event to agree on event-level fields.
+- Resolve identical duplicates and reject conflicting duplicate recommendation
+  keys.
+- Record source identity/version, query bounds, row count, loaded time, and
+  provenance.
+- Cache bounded windows atomically and retain the prior valid window on refresh
+  failure.
+- Never fall back to fixture mode after a Databricks or export failure.
+
+**Verify:** exact query and parameter binding, unsafe identifiers, empty windows,
+optional columns, grouping, deterministic ordering, malformed rows, provider
+failure, and atomic replacement.
+
+**Done when:** a bounded fixture/export/live query produces the same validated
+event-window object.
+
+### 03 - Event Repository, Activation, And Clock Boundaries
+
+**Depends on:** 02.
+
+- Replace forecast-vintage selection and surge detection with event activation.
+- Keep loaded future events private until `actionable_at`.
+- Activate same-time events by action time, target time, descending priority, then
+  stable event ID.
+- Add boundaries for `actionable_at`, `event_time`, proposal expiry, dispatch,
+  movement, completion, and return.
+- Deduplicate repeated loads and polling by stable source event ID.
+- Derive usable simulation bounds from configured bounds and event coverage.
+
+**Verify:** reactive and proactive timing, no early visibility, same-time ordering,
+high-speed jumps, zero-event windows, repeated loads, and no duplicate activation.
+
+**Done when:** advancing the clock deterministically activates only eligible source
+events without consulting Databricks per tick.
+
+## 5. Backend-Owned Feasibility
+
+### 04 - GTFS Recommendation Mapping
+
+**Depends on:** 01.
+
+- Preserve immutable GTFS routes, stops, trips, patterns, schedules, and shapes.
+- Add explicit source hub and route alias maps.
+- Resolve source destination labels to eligible stops/areas where required.
+- Return typed invalid-source outcomes for unknown hubs, routes, destinations, or
+  incompatible direction/service patterns.
+- Do not silently choose an unrelated route.
+
+**Verify:** all configured aliases, unknown values, stable pattern ordering,
+representative service dates, over-midnight schedules, and destination matching.
+
+**Done when:** each valid source recommendation resolves to deterministic backend
+GTFS candidates or a precise visible failure.
+
+### 05 - Backend Fleet Configuration
+
+**Depends on:** 01.
+
+- Keep fleet identity, capacity, initial location, and status entirely in backend
+  configuration.
+- Validate stable unique bus IDs, positive capacity, known initial locations, and
+  configured fleet size.
+- Maintain immutable initial state for reset and seek.
+- Cap per-event assignments by source suggestion, backend policy, and available
+  feasible buses.
+- Remove Databricks/TSPR fleet and load dependencies from dispatch feasibility.
+
+**Verify:** empty/small fleets, duplicate buses, invalid capacity/location, reset,
+and deterministic available-bus ordering.
+
+**Done when:** the simulation can create, reserve, release, and reset its own buses
+without fleet information from Databricks.
+
+### 06 - Proposal, Reservation, And Approval
+
+**Depends on:** 03, 04, 05, and 07.
+
+- For each actionable event, sort recommendations and feasible buses
+  deterministically.
+- Select the highest-priority feasible recommendation and create no more than its
+  rounded `extra_bus_trips_est`, the backend per-event cap, and the available
+  feasible-bus count. Treat lower-priority recommendations as fallbacks rather
+  than cumulative demand.
+- Store source event, priority, recommendation, target event time, GTFS choice,
+  bus, ETA, capacity, and rationale on every proposal.
+- Reserve buses atomically with proposal creation.
+- Support manual approval/rejection/expiry and immediate automatic approval.
+- Permit honest post-event ETA for reactive events; apply configured target/lateness
+  policy to proactive events.
+- Release reservations exactly once after rejection, expiry, cancellation, or
+  failed commit.
+
+**Verify:** zero suggestions, fractional suggestions, insufficient fleet,
+same-priority ties, concurrent conflicts, rollback, reactive approval, proactive
+lateness, rejection, expiry, and idempotent decisions.
+
+**Done when:** one event can safely create and decide feasible backend-owned bus
+proposals without partial state.
+
+### 07 - Routing And Movement Foundations
+
+**Depends on:** 01; reusable work already exists.
+
+- Retain replaceable routing with a deterministic straight-line fallback.
+- Build deadhead, service, and return paths from backend locations and GTFS.
+- Compute travel times and distance from the selected provider.
+- Support proactive arrival targets and reactive dispatch after event start.
+
+**Verify:** zero-distance legs, provider failure, stable paths/times, and both timing
+modes.
+
+**Done when:** every feasible proposal has backend-computed paths and lifecycle
+times independent of Databricks.
+
+### 08 - Movement Lifecycle
+
+**Depends on:** 06 and 07.
+
+- Advance approved buses through reserved, deadheading, waiting when proactive,
+  in-service, return, and available states.
+- Interpolate location and heading from simulation time and backend paths.
+- Process all crossed movement boundaries at accelerated speed.
+- Publish trip and bus updates only after atomic commits.
+- Report added capacity from assigned backend buses without claiming observed
+  ridership or real-world load reduction.
+
+**Verify:** boundary times, proactive waiting, reactive late arrival, interpolation,
+completion, cancellation, return, high-speed jumps, and exactly-once release.
+
+**Done when:** approved simulated buses visibly complete a full dispatch lifecycle.
+
+## 6. Replay And Interfaces
+
+### 09 - Deterministic Seek
+
+**Depends on:** 02, 03, 06, and 08.
+
+- Pause and increment epoch before rebuilding.
+- Reuse the loaded event window when it covers the target.
+- Load and validate a new bounded window atomically when it does not.
+- Restore initial fleet/runtime state and replay canonical event/lifecycle
+  boundaries through the target.
+- Reapply recorded human decisions at or before the target and discard later ones.
+- Keep old state if query, validation, or replay fails.
+- Emit reset only after the rebuilt state commits.
+
+**Verify:** forward/backward seek, window changes, same-target repetition, recorded
+decisions, pending reservations, in-flight buses, failed queries, epoch changes,
+and stable IDs/state.
+
+**Done when:** identical event rows, GTFS, fleet, settings, and decisions reproduce
+identical state at the same simulation time.
+
+### 10 - REST And WebSocket
+
+**Depends on:** 09.
+
+- Implement the SPEC v3 core REST surface and atomic `/state` snapshots.
+- Expose only events actionable by the captured `at` time.
+- Return source/query-window, GTFS, fleet, and readiness metadata without secrets.
+- Replace surge/forecast event vocabulary with dispatch-event vocabulary.
+- Preserve epoch, sequence, bootstrap, reconnect, gap recovery, and reset behavior.
+- Keep route geometry and schedules sourced from backend GTFS.
+- Remove obsolete forecast/origin/analytics endpoints from the required MVP.
+
+**Verify:** schemas, filters, stable ordering, visibility masking, mutation errors,
+snapshot/event consistency, reconnect races, sequence gaps, and reset buffering.
+
+**Done when:** the frontend can run the complete event-to-dispatch workflow through
+documented REST and WebSocket contracts.
+
+## 7. Integration And Acceptance
+
+### 11 - Real Databricks Readiness Gate
+
+**Depends on:** 02, 04, 05, and 10.
+
+- Confirm the explicit Databricks profile and serverless SQL warehouse.
+- Confirm catalog/schema/table or view and least-privilege read permissions.
+- Validate bound window queries against real rows.
+- Confirm event ID stability, timezone, optional availability semantics,
+  destination-share scale, duplicate policy, and source refresh/version behavior.
+- Pin and validate hub/route/destination aliases, GTFS version, fleet config, and
+  one reactive or proactive demo window.
+- Exercise source loss and cached-window readiness without fixture fallback.
+
+**Verify:** at least one real row drives a feasible backend proposal; unknown source
+values fail visibly; filtering excludes out-of-window rows; provider loss preserves
+only valid covered state.
+
+**Done when:** the live parameterized query or a versioned export of the same feed
+drives the full backend workflow with no mock data substituted.
+
+### 12 - Reproducible Demo And Final Acceptance
+
+**Depends on:** 11.
+
+- Automate startup, event activation, proposal auto-pause, approval or rejection,
+  dispatch, movement, completion, return, seek, reset, and reconnect.
+- Demonstrate suggested buses being capped by the simulated fleet.
+- Demonstrate source recommendation validation against backend GTFS.
+- Preserve source-event and backend-decision provenance in UI and logs.
+- Document exact query bounds, source version, GTFS version, fleet config, settings,
+  and commands.
+- Add CI for lint, formatting, strict typing, tests, Docker build, and API contract
+  compatibility.
+
+**Done when:** a fresh developer can reproduce the real historical demo and trace
+every recommendation to Databricks and every bus action to backend-owned data and
+policy.
+
+## 8. Checkpoints And Scope
 
 | Checkpoint | Required work | What it proves |
 |---|---|---|
-| A — V2 foundation | 01–09 using explicit fixtures | Canonical models, coordinator, clock, data/transit interfaces, and as-of demand |
-| B — Manual replay engine | A + 10–14 | Propose/approve/reject/expire/move/return/seek with deterministic state |
-| C — Priority-one frontend demo | B + 15–17 and verified real inputs/preset | Interactive real hourly forecast, origins, manual dispatch, and reconnect/seek |
-| D — Planning and proof | C + 18–20 | Maps/loads, timeline, planner, late-night, findings, and real scorecard |
-| E — Delivery-ready | D + 21–22 | Full integration, degradation behavior, reproducibility, and CI |
+| A - Event foundation | 01-03 with fixtures | One bounded feed, correct activation, no early visibility |
+| B - Manual dispatch | A + 04-08 | Backend GTFS/fleet can safely execute a recommendation |
+| C - Replayable interface | B + 09-10 | Seek, snapshots, WebSocket, and UI contracts are deterministic |
+| D - Real-data demo | C + 11 | A filtered Databricks event drives a real proposal |
+| E - Delivery-ready | D + 12 | The demo is reproducible, observable, and tested |
 
-For the fastest useful slice, exercise one hub, one eligible pattern, and a small
-explicit fleet through chunks 01–17. Use the same v2 interfaces for fixtures and
-real inputs, then expand coverage to all three hubs. Do not
-mistake a fixture-only Checkpoint B for the real-data Checkpoint C.
+The fastest useful slice is one real event, one hub, one resolvable route, and two
+or three simulated buses. Expand event windows, hubs, and routes only after that
+slice completes. Forecast charts, origins, backtests, and broad analytics are
+outside the critical path and must not delay Checkpoint D.
 
-If time is short, prioritize SPEC 12.1: finish the priority-one slice first, then
-routes/load, timeline, hourly profile, late-night, and real backtest before the
-remaining analytics. Within chunk 20, the backtest endpoint can be delivered
-first. Keep incomplete features visibly unavailable rather than inventing data.
+## 9. Decision Register
 
-## 9. Decision register and frontend coordination
-
-| Decision / input | Needed by | Action |
+| Decision/input | Status | Required action |
 |---|---|---|
-| Databricks profile and artifact destinations | 21 | Ask team; explicit profile, serverless, shared-workspace coordination |
-| Timestamp ambiguity/source granularity | 09, 17, 21 | Record normalization and partial-hour policy |
-| Model/training and baseline warm-up | 09, 17, 20, 21 | Choose/version method; derive actual replay coverage |
-| Fleet count/capacity/source/locations | 08; real gate 21 | Supply explicit configuration, including donor eligibility |
-| Before/after load model | 08, 11 | Document formula/inputs or expose null estimates with explanation |
-| GTFS representative service-day mapping | 06 | Pin and disclose mapping outside feed validity |
-| Approval timeout/mapping | 12 | Use spec default and RESERVED-until-dispatch behavior; align frontend |
-| Curated event owner/storage | 20 | Assign curator and source-backed CSV/table location |
-| Frontend contract clarifications | 02, 15–17 | Sync mocks: hourly time keys, nullable partials, load >100, hour_complete, stale trip null, bootstrap buffering |
-| Verified preset times | 21 | Demonstrate model-triggered feasible proposals before publishing presets |
-| Hosting | 22 | Choose public HTTPS/WSS provider supporting one authoritative process |
+| Single filtered dispatch-event feed | Decided | Implement SPEC v3 contract |
+| Backend-owned simulated fleet | Decided | Configure buses locally; no Databricks fleet dependency |
+| Reactive events without `available_at` | Decided | Activate at `event_time` |
+| Proactive events with `available_at` | Decided | Activate earlier; target `event_time` |
+| Databricks source location | Open | Confirm catalog, schema, table/view, profile, and warehouse |
+| Event IDs | Open | Confirm source field or deterministic generation policy |
+| Timestamp encoding | Open | Confirm timezone and normalize explicitly |
+| Destination share scale | Open | Confirm fraction versus percentage points |
+| Hub/route aliases | Open | Supply canonical mapping and validate coverage |
+| Duplicate/source-version policy | Open | Confirm refresh and conflicting-row behavior |
+| Query bounds | Open | Choose demo range and seek window policy |
+| Fleet configuration | Open | Choose bus IDs, capacities, and initial locations |
+| Approval mode | Open | Choose manual or automatic demo behavior |
+| Reactive lateness | Open | Configure allowed post-event dispatch behavior |
+| Human decisions during seek | Decided | Replay decisions at/before target; discard later decisions |
 
-Unresolved choices must not silently change SPEC.md. Record the agreed decision
-there and update schemas, fixtures, and tests together when the contract changes.
+Open inputs must be resolved before chunk 11. They may not be hidden behind fixture
+defaults in a production or judged demo.
