@@ -25,6 +25,15 @@ class EventReader:
             event for event in self._window.events if event.actionable_at <= at
         )
 
+    def events_actionable_after(
+        self, previous: datetime, through: datetime
+    ) -> tuple[DispatchEvent, ...]:
+        return tuple(
+            event
+            for event in self._window.events
+            if previous < event.actionable_at <= through
+        )
+
     def event(self, event_id: str) -> DispatchEvent | None:
         return self._by_id.get(event_id)
 

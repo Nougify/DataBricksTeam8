@@ -51,11 +51,19 @@ class FakeMonotonicTimeSource:
 
 
 class BoundaryPriority(IntEnum):
-    ISSUANCE = 10
-    PROPOSAL = 20
-    EXPIRY = 30
-    MOVEMENT = 40
-    HOURLY_DEMAND = 50
+    EVENT_ACTIVATION = 10
+    EVENT_TARGET = 20
+    PROPOSAL = 30
+    PROPOSAL_EXPIRY = 40
+    DISPATCH = 50
+    MOVEMENT = 60
+    COMPLETION = 70
+    RETURN = 80
+    HOURLY_DEMAND = 90
+
+    # Compatibility aliases for existing callers while lifecycle services migrate.
+    ISSUANCE = EVENT_ACTIVATION
+    EXPIRY = PROPOSAL_EXPIRY
 
 
 @dataclass(frozen=True)
@@ -65,6 +73,8 @@ class BoundaryResult:
 
 
 BoundaryHandler = Callable[[StateEditor, SimulationClock], BoundaryResult]
+BoundaryKey = tuple[str, str]
+SeekHandler = Callable[[VancouverDateTime], SimulationClock]
 
 
 @dataclass(order=True)
@@ -74,17 +84,35 @@ class _Boundary:
     registration_order: int
     at: VancouverDateTime = field(compare=False)
     handler: BoundaryHandler = field(compare=False)
+    key: BoundaryKey | None = field(compare=False, default=None)
 
 
-def initial_clock(settings: Settings) -> SimulationClock:
+def initial_clock(
+    settings: Settings,
+    *,
+    coverage_start: VancouverDateTime | None = None,
+    coverage_end: VancouverDateTime | None = None,
+) -> SimulationClock:
+    minimum = max(
+        settings.simulation_min_time,
+        coverage_start or settings.simulation_min_time,
+    )
+    maximum = min(
+        settings.simulation_max_time,
+        coverage_end or settings.simulation_max_time,
+    )
+    if minimum > maximum:
+        raise ValueError("configured simulation bounds do not overlap event coverage")
+    if not minimum <= settings.simulation_start_time <= maximum:
+        raise ValueError("simulation_start_time must be within usable event coverage")
     return SimulationClock(
         current_time=settings.simulation_start_time,
         local_date=settings.simulation_start_time.date(),
         hour=settings.simulation_start_time.hour,
         speed=settings.simulation_speed,
         status=ClockStatus.PAUSED,
-        min_time=settings.simulation_min_time,
-        max_time=settings.simulation_max_time,
+        min_time=minimum,
+        max_time=maximum,
         approval_mode=settings.approval_mode,
         auto_pause_on_proposal=settings.auto_pause_on_proposal,
         epoch=0,
@@ -143,7 +171,9 @@ class SimulationClockController:
         self._poll_interval_seconds = poll_interval_seconds
         self._anchor = time_source.now()
         self._boundaries: list[_Boundary] = []
+        self._boundary_keys: set[BoundaryKey] = set()
         self._next_registration = 0
+        self._seek_handler: SeekHandler | None = None
         self._lock = RLock()
         self._stop = asyncio.Event()
 
@@ -156,8 +186,12 @@ class SimulationClockController:
         at: VancouverDateTime,
         priority: BoundaryPriority,
         handler: BoundaryHandler,
-    ) -> None:
+        *,
+        key: BoundaryKey | None = None,
+    ) -> bool:
         with self._lock:
+            if key is not None and key in self._boundary_keys:
+                return False
             clock = self.clock
             current_utc = clock.current_time.astimezone(UTC)
             boundary_utc = at.astimezone(UTC)
@@ -167,6 +201,8 @@ class SimulationClockController:
                     "boundary must be after current_time and within bounds"
                 )
             self._next_registration += 1
+            if key is not None:
+                self._boundary_keys.add(key)
             heapq.heappush(
                 self._boundaries,
                 _Boundary(
@@ -175,8 +211,29 @@ class SimulationClockController:
                     registration_order=self._next_registration,
                     at=at,
                     handler=handler,
+                    key=key,
                 ),
             )
+            return True
+
+    def clear_boundaries(self, key_namespace: str) -> None:
+        with self._lock:
+            retained = [
+                boundary
+                for boundary in self._boundaries
+                if boundary.key is None or boundary.key[0] != key_namespace
+            ]
+            self._boundaries = retained
+            heapq.heapify(self._boundaries)
+            self._boundary_keys = {
+                boundary.key for boundary in retained if boundary.key is not None
+            }
+
+    def set_seek_handler(self, handler: SeekHandler) -> None:
+        with self._lock:
+            if self._seek_handler is not None and self._seek_handler != handler:
+                raise ValueError("seek handler is already configured")
+            self._seek_handler = handler
 
     def resume(self) -> SimulationClock:
         with self._lock:
@@ -226,7 +283,11 @@ class SimulationClockController:
             clock = self.clock
             if not clock.min_time <= at <= clock.max_time:
                 raise ValueError("seek time must be within simulation bounds")
-            updated = self._coordinator.reset(at).clock
+            updated = (
+                self._seek_handler(at)
+                if self._seek_handler is not None
+                else self._coordinator.reset(at).clock
+            )
             self._anchor = self._time_source.now()
             return updated
 
@@ -328,6 +389,9 @@ class SimulationClockController:
             for boundary in due:
                 heapq.heappush(self._boundaries, boundary)
             raise
+        for boundary in due:
+            if boundary.key is not None:
+                self._boundary_keys.discard(boundary.key)
         return self.clock
 
     def _commit_clock(

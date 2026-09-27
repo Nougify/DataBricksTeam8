@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from app.config import Settings
 from app.data.store import EventWindowStore
 from app.routing import RoutingService
+from app.services.activation import EventActivationService
 from app.services.clock import SimulationClockController
 from app.services.coordinator import MutationCoordinator
 from app.services.events import EventSink
@@ -19,4 +20,5 @@ class RuntimeOwner:
     routing: RoutingService
     coordinator: MutationCoordinator
     clock: SimulationClockController
+    activation: EventActivationService
     events: EventSink

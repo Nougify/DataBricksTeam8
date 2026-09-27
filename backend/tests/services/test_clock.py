@@ -122,6 +122,23 @@ def test_invalid_speed_and_poll_interval_are_rejected() -> None:
         )
 
 
+def test_initial_clock_intersects_configured_bounds_with_event_coverage() -> None:
+    settings = Settings(
+        simulation_min_time=START - timedelta(hours=2),
+        simulation_start_time=START,
+        simulation_max_time=START + timedelta(hours=4),
+    )
+
+    clock = initial_clock(
+        settings,
+        coverage_start=START - timedelta(hours=1),
+        coverage_end=START + timedelta(hours=3),
+    )
+
+    assert clock.min_time == START - timedelta(hours=1)
+    assert clock.max_time == START + timedelta(hours=3)
+
+
 def test_large_step_processes_boundaries_in_time_priority_and_registration_order() -> (
     None
 ):
@@ -156,6 +173,36 @@ def test_large_step_processes_boundaries_in_time_priority_and_registration_order
         "later",
     ]
     assert controller.clock.current_time == START + timedelta(hours=3)
+
+
+def test_boundary_keys_deduplicate_pending_work() -> None:
+    controller, source, _ = make_controller()
+    calls: list[str] = []
+
+    def handler(editor: object, clock: SimulationClock) -> BoundaryResult:
+        del editor, clock
+        calls.append("called")
+        return BoundaryResult()
+
+    boundary_at = START + timedelta(seconds=1)
+    assert controller.register_boundary(
+        boundary_at,
+        BoundaryPriority.EVENT_ACTIVATION,
+        handler,
+        key=("dispatch-event", "activate:event-1"),
+    )
+    assert not controller.register_boundary(
+        boundary_at,
+        BoundaryPriority.EVENT_ACTIVATION,
+        handler,
+        key=("dispatch-event", "activate:event-1"),
+    )
+    controller.resume()
+    source.advance(1)
+
+    controller.pump()
+
+    assert calls == ["called"]
 
 
 def test_auto_pause_stops_exactly_at_proposal_and_preserves_event_order() -> None:

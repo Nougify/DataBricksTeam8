@@ -23,20 +23,19 @@ Completed foundations:
 
 Partial or superseded implementation still present:
 
-- Event visibility is correct, but activation is not a coordinator-owned boundary
-  and does not create proposals or mutate event status.
+- Event activation is coordinator-owned and deterministic, but proposal creation
+  and downstream event status transitions remain for chunk 06.
 - Hub and route aliases resolve, but destination, direction, service-pattern, and
   service-date feasibility do not.
 - Generated fixture buses work, but `fleet_config_path` is not loaded or validated.
 - Approval and rejection work, but no production service creates, expires, or
   automatically approves proposals.
-- Seek resets state but does not replay events, movement, or recorded decisions.
+- Seek rebuilds event activation but does not replay movement or recorded decisions.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **03 - Event Repository, Activation, And Clock
-Boundaries**, followed by completion of **04-07** before movement and replay. Do
-not build additional forecast/origin/analytics endpoints against the superseded
-contract.
+The next implementation step is **04 - GTFS Recommendation Mapping**, followed by
+completion of **05-07** before movement and replay. Do not build additional
+forecast/origin/analytics endpoints against the superseded contract.
 
 ### 1.1 Implementation Status
 
@@ -44,7 +43,7 @@ contract.
 |---|---|---|
 | 01 Event contract migration | Complete | Canonical events and `dispatch_event_id` are authoritative across the runtime |
 | 02 Filtered event adapters and cache | Mostly complete | Finalize live query details and test real export/Databricks rows |
-| 03 Event repository and activation | Partial | Coordinator activation boundaries, deduplication, status changes, and events |
+| 03 Event repository and activation | Complete | Loaded events activate once through coordinator-owned keyed boundaries |
 | 04 GTFS recommendation mapping | Partial | Destination, direction, pattern, and service-date resolution |
 | 05 Backend fleet configuration | Partial | File-backed fleet loading and validation |
 | 06 Proposal and approval | Partial | Proposal creation, reservation, expiry, automatic approval, and fleet caps |
@@ -59,30 +58,27 @@ contract.
 
 Complete the following in dependency order:
 
-1. Register deterministic event activation and target-time clock boundaries. Store
-   active event state in the coordinator, deduplicate activation, update status,
-   and publish changes only after commit.
-2. Finish source recommendation mapping for destinations, direction, service
+1. Finish source recommendation mapping for destinations, direction, service
    patterns, and representative service dates. Preserve typed visible failures.
-3. Load and validate explicit fleet configuration, including unique IDs, positive
+2. Load and validate explicit fleet configuration, including unique IDs, positive
    capacities, known initial locations, home locations, and empty/custom fleets.
-4. Implement event-to-proposal creation: recommendation fallback, bus ranking,
+3. Implement event-to-proposal creation: recommendation fallback, bus ranking,
    suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
    rollback, and automatic approval mode.
-5. Compose deadhead, service, and return paths and times. Apply proactive lateness
+4. Compose deadhead, service, and return paths and times. Apply proactive lateness
    policy without rejecting normal reactive post-event arrivals.
-6. Implement movement boundaries and interpolation through reserved, deadheading,
+5. Implement movement boundaries and interpolation through reserved, deadheading,
    waiting, in-service, returning, completed, and available states.
-7. Make seek rebuild state and replay all canonical boundaries and eligible human
+6. Make seek rebuild state and replay all canonical boundaries and eligible human
    decisions through the target while preserving old state on load/replay failure.
-8. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+7. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-9. Replace the root health-only frontend with clock controls, event/proposal
+8. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-10. Select an explicit Databricks profile and validate the live/exported event
+9. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-11. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+10. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -204,6 +200,11 @@ event-window object.
 ### 03 - Event Repository, Activation, And Clock Boundaries
 
 **Depends on:** 02.
+
+**Status:** Complete. The event window remains private source state; canonical
+events enter coordinator state only at `actionable_at`, through stable keyed clock
+boundaries. Bootstrap and seek rebuild eligible events, future boundaries are
+recreated, and usable clock bounds intersect configuration with source coverage.
 
 - Replace forecast-vintage selection and surge detection with event activation.
 - Keep loaded future events private until `actionable_at`.

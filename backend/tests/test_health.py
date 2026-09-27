@@ -61,6 +61,11 @@ def test_fixture_runtime_uses_configured_representative_dates() -> None:
 def test_v3_state_hides_future_events_and_initializes_fleet() -> None:
     with TestClient(create_app(Settings())) as client:
         initial = client.get("/api/v1/state")
+        future_query = client.get(
+            "/api/v1/dispatch-events",
+            params={"at": "2026-07-10T15:00:00-07:00"},
+        )
+        future_detail = client.get("/api/v1/dispatch-events/valid-event")
         seek = client.post(
             "/api/v1/clock/seek", json={"time": "2026-07-10T09:30:00-07:00"}
         )
@@ -69,6 +74,8 @@ def test_v3_state_hides_future_events_and_initializes_fleet() -> None:
     assert initial.status_code == 200
     assert len(initial.json()["buses"]) == 3
     assert initial.json()["dispatch_events"] == []
+    assert future_query.json() == []
+    assert future_detail.status_code == 404
     assert seek.status_code == 200
     assert seek.json()["epoch"] == 1
     assert [event["id"] for event in activated.json()["dispatch_events"]] == [

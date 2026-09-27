@@ -8,6 +8,7 @@ from app.config import DataMode
 from app.data.adapters import DatabricksEventSource, FixtureEventSource
 from app.data.fixtures import build_fixture_rows
 from app.data.models import DispatchEventRow, group_event_rows
+from app.data.reader import EventReader
 from app.data.store import EventWindowStore
 
 PACIFIC = timezone(timedelta(hours=-7))
@@ -39,6 +40,22 @@ def test_event_derives_proactive_timing_and_operational_values() -> None:
     assert event.surge_ratio == 2.5
     assert event.suggested_extra_buses == 2
     assert event.priority_score == 0.9
+
+
+def test_reader_returns_newly_actionable_interval_in_canonical_order() -> None:
+    reader = EventReader(FixtureEventSource("test-v1").load_window(START, END))
+
+    events = reader.events_actionable_after(
+        START, datetime(2026, 7, 10, 13, tzinfo=PACIFIC)
+    )
+
+    assert [event.id for event in events] == [
+        "valid-event",
+        "unknown-route",
+        "too-many-buses",
+        "same-time-a",
+        "same-time-b",
+    ]
 
 
 def test_rejects_availability_after_event_time() -> None:

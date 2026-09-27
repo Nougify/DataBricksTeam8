@@ -1,3 +1,4 @@
+from app.services.activation import EventActivationService
 from app.services.clock import (
     BoundaryPriority,
     BoundaryResult,
@@ -20,6 +21,7 @@ __all__ = [
     "BoundaryResult",
     "CoordinatorSnapshot",
     "EpochConflictError",
+    "EventActivationService",
     "EventSink",
     "FakeMonotonicTimeSource",
     "InMemoryEventSink",

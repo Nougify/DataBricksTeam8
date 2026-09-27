@@ -34,6 +34,7 @@ from app.errors import install_error_handlers
 from app.repositories.memory import StateEditor, entities_from
 from app.routing import build_routing_service
 from app.runtime import RuntimeOwner
+from app.services.activation import EventActivationService
 from app.services.clock import (
     SimulationClockController,
     SystemMonotonicTimeSource,
@@ -128,15 +129,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             for number in range(1, resolved_settings.fleet_size + 1)
         )
+        metadata = data.reader().window.metadata
         coordinator = MutationCoordinator(
             events,
-            initial_clock(resolved_settings),
+            initial_clock(
+                resolved_settings,
+                coverage_start=metadata.window_start,
+                coverage_end=metadata.window_end,
+            ),
             entities_from(
                 buses=fleet,
-                dispatch_events=data.reader().window.events,
             ),
         )
         clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
+        activation = EventActivationService(data.reader(), coordinator, clock)
+        activation.start()
         routing = build_routing_service(
             resolved_settings.routing_provider,
             resolved_settings.routing_speed_kph,
@@ -148,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             routing=routing,
             coordinator=coordinator,
             clock=clock,
+            activation=activation,
             events=events,
         )
         clock_task = asyncio.create_task(clock.run())
@@ -238,10 +246,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         at: datetime | None = None,
     ) -> list[DispatchEventResponse]:
         runtime: RuntimeOwner = application.state.runtime
-        captured_at = at or runtime.coordinator.snapshot().clock.current_time
+        snapshot = runtime.coordinator.snapshot()
+        captured_at = (
+            min(at, snapshot.clock.current_time) if at else snapshot.clock.current_time
+        )
         events = tuple(
             event
-            for event in runtime.coordinator.snapshot().entities.dispatch_events.list()
+            for event in snapshot.entities.dispatch_events.list()
             if event.actionable_at <= captured_at
         )
         return [
@@ -258,13 +269,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     async def dispatch_event(event_id: str) -> DispatchEventResponse:
         runtime: RuntimeOwner = application.state.runtime
-        event = runtime.coordinator.snapshot().entities.dispatch_events.get(
-            DispatchEventId(event_id)
-        )
-        if (
-            event is None
-            or event.actionable_at > runtime.coordinator.snapshot().clock.current_time
-        ):
+        snapshot = runtime.coordinator.snapshot()
+        event = snapshot.entities.dispatch_events.get(DispatchEventId(event_id))
+        if event is None or event.actionable_at > snapshot.clock.current_time:
             raise HTTPException(status_code=404, detail="dispatch event not found")
         return _event_response(event)
 
