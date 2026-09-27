@@ -20,19 +20,17 @@
 // HTML markers (hubs, labels) always sit above the canvas, whatever their position here.
 // Trade-off: our GL overlays draw above the basemap's own labels (DESIGN §8.1 would put rows 1–4 under them).
 import { CatchmentsLayer, CatchmentsLegend } from "./CatchmentsLayer";
+import { BusesLayer, BusesLegend } from "./BusesLayer";
 import { HubHaloLegend, HubMarkers } from "./HubMarkers";
+import { TripPathsLayer, TripPathsLegend } from "./TripPathsLayer";
 import type { LayerKey } from "@/lib/live/store";
 import type { MapLayerModule } from "./types";
 
 export const MAP_LAYERS: readonly MapLayerModule[] = [
-  // 1 Routes (M3): RoutesLayer, toggle "routes" (also shown in preview). Legend: need (5 px, casing) / spare (3.5 px).
   { id: "catchments", slot: 2, toggle: "catchments", Gl: CatchmentsLayer, Legend: CatchmentsLegend },
-  // 3 Origin arcs (M2): OriginArcsLayer, toggle "origins". Legend: transfer required (thick, emphasised) / one-seat ride.
-  // 4 Origin bubbles (M2): OriginBubblesLayer, toggle "origins" (the arcs' legend covers both).
   { id: "hubs", slot: 5, toggle: null, Html: HubMarkers, Legend: HubHaloLegend },
-  // 6 Surges (M3): SurgesLayer, toggle "surges". Legend: UPCOMING ring / ACTIVE filled / RESOLVED faded.
-  // 7 Trip paths (M3): TripPathsLayer, toggle "buses". Legend: deadhead dashed / service solid.
-  // 8 Buses (M4): BusesLayer, toggle "buses". Legend: bus glyph by status (solid / outline).
+  { id: "trip-paths", slot: 7, toggle: "buses", Gl: TripPathsLayer, Legend: TripPathsLegend },
+  { id: "buses", slot: 8, toggle: "buses", Html: BusesLayer, Legend: BusesLegend },
 ];
 
 /** Whether a module is shown with the current layer toggles (modules without a toggle are always on). */

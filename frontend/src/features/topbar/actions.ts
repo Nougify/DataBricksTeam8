@@ -20,7 +20,7 @@ export function toastFailure(action: string, err: unknown): void {
 export interface JumpOptions {
   /** Select this hub after the seek (null shows the network overview). Leave out to keep the selection. */
   hubId?: string | null;
-  /** Tab to open when a hub is selected. Default "now". */
+  /** Tab to open when a hub is selected. Default "events". */
   tab?: HubTab;
   /** Names the target in an error toast ("jump to UBC exam weekend"). */
   label?: string;
@@ -34,7 +34,7 @@ export function useJumpTo() {
       onSuccess: () => {
         if ("hubId" in opts) {
           const hubId = opts.hubId ?? null;
-          useSim.getState().selectHub(hubId, hubId ? (opts.tab ?? "now") : undefined);
+          useSim.getState().selectHub(hubId, hubId ? (opts.tab ?? "events") : undefined);
         }
         onDone?.();
       },
@@ -44,11 +44,11 @@ export function useJumpTo() {
   return { jump, isPending: seek.isPending };
 }
 
-/** Choosing a preset seeks to its time and selects its hub on the Now tab, or shows the overview (spec §6). */
+/** Choosing a preset seeks to its time and selects its hub on Events, or shows the overview. */
 export function usePresetJump() {
   const { jump, isPending } = useJumpTo();
   const jumpToPreset = (preset: Preset) =>
-    jump(preset.time, { hubId: preset.hub_id, tab: "now", label: preset.label });
+    jump(preset.time, { hubId: preset.hub_id, tab: "events", label: preset.label });
   return { jumpToPreset, isPending };
 }
 

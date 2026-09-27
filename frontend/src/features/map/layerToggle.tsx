@@ -13,21 +13,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSim, type LayerKey } from "@/lib/live/store";
-import { AreaSwatch, BusSwatch, LineSwatch, PointSwatch } from "./swatches";
+import { AreaSwatch, BusSwatch } from "./swatches";
 
 const ITEMS: readonly { key: LayerKey; label: string; swatch: ReactNode }[] = [
-  { key: "origins", label: "Origins", swatch: <LineSwatch strokeClass="stroke-access-transfer" width={3} casing /> },
-  {
-    key: "surges",
-    label: "Surges",
-    swatch: <PointSwatch variant="ring" fillClass="fill-surge-high" strokeClass="stroke-surge-high" />,
-  },
   {
     key: "buses",
     label: "Buses & trips",
     swatch: <BusSwatch variant="solid" fillClass="fill-trip-active" strokeClass="stroke-trip-active" />,
   },
-  { key: "routes", label: "Routes (need/spare)", swatch: <LineSwatch strokeClass="stroke-need" width={4} casing /> },
   { key: "catchments", label: "Hub catchments", swatch: <AreaSwatch /> },
 ];
 

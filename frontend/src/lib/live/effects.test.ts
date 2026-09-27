@@ -30,7 +30,7 @@ describe("v3 proposal effects", () => {
     expect(title).toBe("New proposal: bus from route 25 → 99 at UBC");
     expect(options).toMatchObject({ id: `proposal:${TRIP.id}`, description: PAUSED_FOR_REVIEW });
     (options?.action as Action).onClick({} as Parameters<Action["onClick"]>[0]);
-    expect(useSim.getState()).toMatchObject({ selectedHubId: "ubc", tab: "dispatch", previewTripId: TRIP.id });
+    expect(useSim.getState()).toMatchObject({ selectedHubId: "ubc", tab: "proposals", previewTripId: TRIP.id });
   });
 
   it("expires the existing proposal toast", () => {

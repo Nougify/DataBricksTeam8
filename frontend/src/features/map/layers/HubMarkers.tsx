@@ -150,7 +150,7 @@ export function HubMarkers({ dimmed }: MapLayerProps) {
     [hubs, statuses, surges, bands],
   );
 
-  const onSelect = useMemo(() => (id: string) => selectHub(id, "now"), [selectHub]);
+  const onSelect = useMemo(() => (id: string) => selectHub(id), [selectHub]);
 
   return (
     <>

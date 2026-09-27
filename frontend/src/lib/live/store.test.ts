@@ -61,33 +61,33 @@ describe("live store", () => {
   });
 
   describe("selection", () => {
-    it("selecting a hub opens Now and clears hub-specific state", () => {
+    it("selecting a hub opens Events and clears hub-specific state", () => {
       const s = useSim.getState();
-      s.selectHub("waterfront", "routes");
+      s.selectHub("waterfront", "fleet");
       s.startPreview(TRIP.id);
       s.setHoverOrigin("Surrey");
       useSim.getState().selectHub("ubc");
       expect(useSim.getState()).toMatchObject({
         selectedHubId: "ubc",
-        tab: "now",
+        tab: "events",
         previewTripId: null,
         hoverOrigin: null,
       });
     });
 
     it("re-selecting the same hub keeps the tab unless one is given", () => {
-      useSim.getState().selectHub("ubc", "origins");
+      useSim.getState().selectHub("ubc", "trips");
       useSim.getState().selectHub("ubc");
-      expect(useSim.getState().tab).toBe("origins");
-      useSim.getState().selectHub("ubc", "dispatch");
-      expect(useSim.getState().tab).toBe("dispatch");
+      expect(useSim.getState().tab).toBe("trips");
+      useSim.getState().selectHub("ubc", "proposals");
+      expect(useSim.getState().tab).toBe("proposals");
     });
 
     it("toggles layers", () => {
-      useSim.getState().toggleLayer("routes");
-      expect(useSim.getState().layers).toContain("routes");
-      useSim.getState().toggleLayer("origins");
-      expect(useSim.getState().layers).not.toContain("origins");
+      useSim.getState().toggleLayer("buses");
+      expect(useSim.getState().layers).not.toContain("buses");
+      useSim.getState().toggleLayer("buses");
+      expect(useSim.getState().layers).toContain("buses");
     });
   });
 

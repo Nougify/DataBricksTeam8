@@ -96,8 +96,8 @@ function hubName(hubId: string | null, ctx: EffectContext): string | null {
 function review(trip: AdditionalTrip) {
   const s = useSim.getState();
   const hubId = s.dispatchEvents[trip.dispatch_event_id]?.hub_id;
-  if (hubId) s.selectHub(hubId, "dispatch");
-  else s.setTab("dispatch");
+  if (hubId) s.selectHub(hubId, "proposals");
+  else s.setTab("proposals");
   useSim.getState().startPreview(trip.id);
 }
 

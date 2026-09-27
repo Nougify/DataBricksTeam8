@@ -4,7 +4,7 @@ import { parseUrlState, serializeUrlState } from "./state";
 
 const defaults = {
   selectedHubId: null,
-  tab: "now" as const,
+  tab: "events" as const,
   originsBasis: "actual" as const,
   horizon: DEFAULT_HORIZON,
   layers: [...DEFAULT_LAYERS],
@@ -13,23 +13,23 @@ const defaults = {
 
 describe("parseUrlState", () => {
   it("reads every param", () => {
-    expect(parseUrlState("?hub=ubc&tab=dispatch&basis=typical&h=12&layers=origins,routes&t=2025-12-06T13:00:00-08:00")).toEqual({
+    expect(parseUrlState("?hub=ubc&tab=proposals&basis=typical&h=12&layers=buses&t=2025-12-06T13:00:00-08:00")).toEqual({
       hub: "ubc",
-      tab: "dispatch",
+      tab: "proposals",
       basis: "typical",
       horizon: 12,
-      layers: ["origins", "routes"],
+      layers: ["buses"],
       time: "2025-12-06T13:00:00-08:00",
     });
   });
 
   it("ignores invalid values", () => {
-    expect(parseUrlState("?hub=UBC!&tab=map&basis=median&h=-3&layers=origins,bogus&t=tomorrow")).toEqual({
+    expect(parseUrlState("?hub=UBC!&tab=map&basis=median&h=-3&layers=routes,bogus&t=tomorrow")).toEqual({
       hub: null,
       tab: null,
       basis: null,
       horizon: null,
-      layers: ["origins"],
+      layers: [],
       time: null,
     });
   });
@@ -54,24 +54,28 @@ describe("serializeUrlState", () => {
     const search = serializeUrlState("?mock_nonhub=1", {
       ...defaults,
       selectedHubId: "ubc",
-      tab: "origins",
+      tab: "trips",
       originsBasis: "typical",
       horizon: 24,
-      layers: ["routes", "origins"],
+      layers: ["buses"],
     });
     expect(new URLSearchParams(search).get("mock_nonhub")).toBe("1");
     expect(parseUrlState(search)).toMatchObject({
       hub: "ubc",
-      tab: "origins",
+      tab: "trips",
       basis: "typical",
       horizon: 24,
-      layers: ["origins", "routes"],
+      layers: ["buses"],
     });
   });
 
-  it("drops the tab when no hub is selected, and t once the banner is answered", () => {
-    const search = serializeUrlState("?hub=ubc&tab=routes&t=2025-12-06T13:00:00-08:00", defaults);
+  it("drops default state and t once the banner is answered", () => {
+    const search = serializeUrlState("?hub=ubc&tab=fleet&t=2025-12-06T13:00:00-08:00", defaults);
     expect(search).toBe("");
+  });
+
+  it("keeps a non-default operations tab without a hub", () => {
+    expect(serializeUrlState("", { ...defaults, tab: "fleet" })).toBe("?tab=fleet");
   });
 
   it("keeps t while the banner is pending", () => {

@@ -4,12 +4,12 @@ import { create } from "zustand";
 import type { AdditionalTrip, Clock, OriginsBasis, StateResponse, TripStatus, WsMessage } from "@/lib/api/schemas";
 import { applyMessages, applySnapshot, emptySim, type SimEffect, type SimSlice } from "./reducer";
 
-export const HUB_TABS = ["now", "origins", "dispatch", "routes", "late-night", "planner", "findings"] as const;
+export const HUB_TABS = ["events", "proposals", "trips", "fleet"] as const;
 export type HubTab = (typeof HUB_TABS)[number];
 
-export const LAYER_KEYS = ["origins", "surges", "buses", "routes", "catchments"] as const;
+export const LAYER_KEYS = ["buses", "catchments"] as const;
 export type LayerKey = (typeof LAYER_KEYS)[number];
-export const DEFAULT_LAYERS: readonly LayerKey[] = ["origins", "surges", "buses", "catchments"];
+export const DEFAULT_LAYERS: readonly LayerKey[] = ["buses", "catchments"];
 
 export const DEFAULT_HORIZON = 6;
 
@@ -70,7 +70,7 @@ export type LiveState = SimSlice & UiSlice & StatusSlice & LiveActions;
 
 const initialUi: UiSlice = {
   selectedHubId: null,
-  tab: "now",
+  tab: "events",
   previewTripId: null,
   focusTripId: null,
   originsBasis: "actual",
@@ -174,7 +174,7 @@ export const useSim = create<LiveState>()((set, get) => ({
     }
     set({
       selectedHubId: hubId,
-      tab: tab ?? "now",
+      tab: tab ?? "events",
       previewTripId: null,
       focusTripId: null,
       hoverOrigin: null,

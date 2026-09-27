@@ -64,7 +64,7 @@ export function serializeUrlState(search: string, s: UrlSource): string {
   const put = (key: string, value: string | null) => (value === null ? q.delete(key) : q.set(key, value));
 
   put(P.hub, s.selectedHubId);
-  put(P.tab, s.selectedHubId && s.tab !== "now" ? s.tab : null);
+  put(P.tab, s.tab !== "events" ? s.tab : null);
   put(P.basis, s.originsBasis !== "actual" ? s.originsBasis : null);
   put(P.horizon, s.horizon !== DEFAULT_HORIZON ? String(s.horizon) : null);
   put(P.layers, sameLayers(s.layers, DEFAULT_LAYERS) ? null : LAYER_KEYS.filter((l) => s.layers.includes(l)).join(","));
@@ -77,7 +77,7 @@ export function serializeUrlState(search: string, s: UrlSource): string {
 
 function applyToStore(url: UrlUiState) {
   const s = useSim.getState();
-  s.selectHub(url.hub, url.hub ? (url.tab ?? "now") : undefined);
+  s.selectHub(url.hub, url.tab ?? "events");
   s.setOriginsBasis(url.basis ?? "actual");
   s.setHorizon(url.horizon ?? DEFAULT_HORIZON);
   if (!sameLayers(url.layers ?? DEFAULT_LAYERS, s.layers)) s.setLayers(url.layers ?? DEFAULT_LAYERS);
