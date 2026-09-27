@@ -1,17 +1,30 @@
 // The live store: simulation state from /state + WebSocket (reducer.ts), UI selection, and connection status.
 // Components subscribe with selectors; rAF loops read it with useSim.getState() outside React.
 import { create } from "zustand";
-import type { AdditionalTrip, Clock, OriginsBasis, StateResponse, TripStatus, WsMessage } from "@/lib/api/schemas";
+import type { AdditionalTrip, Clock, StateResponse, TripStatus, WsMessage } from "@/lib/api/schemas";
 import { applyMessages, applySnapshot, emptySim, type SimEffect, type SimSlice } from "./reducer";
 
-export const HUB_TABS = ["events", "proposals", "trips", "fleet"] as const;
+export const HUB_TABS = ["now", "origins", "dispatch", "routes", "late-night", "planner", "findings"] as const;
 export type HubTab = (typeof HUB_TABS)[number];
 
-export const LAYER_KEYS = ["buses", "catchments"] as const;
+export const LAYER_KEYS = ["origins", "origin-dots", "surges", "buses", "routes", "catchments"] as const;
 export type LayerKey = (typeof LAYER_KEYS)[number];
-export const DEFAULT_LAYERS: readonly LayerKey[] = ["buses", "catchments"];
+// "origin-dots" (the origin arcs and bubbles) starts off.
+export const DEFAULT_LAYERS: readonly LayerKey[] = ["origins", "surges", "buses", "catchments"];
 
+/** Forecast window in hours (the Now chart's 6 / 12 / 24 h selector; URL param `h`). */
 export const DEFAULT_HORIZON = 6;
+
+/** Origins basis (DECISIONS.md "2b answers"): the typical mix for the sim's day type and last full hour, or the
+ * whole dataset. There is no per-hour actual origin mix in the bundled data. */
+export type OriginsBasis = "typical" | "all";
+export const DEFAULT_ORIGINS_BASIS: OriginsBasis = "typical";
+
+/** Forecast target on the Now tab: pings arriving at the hub or leaving it (model.surge_forecast_hourly). */
+export type ForecastTarget = "arrivals" | "departures";
+
+/** Forecast windows offered on the Now tab: the next N hours plus the same span of history. */
+export const HORIZON_OPTIONS = [6, 12, 24] as const;
 
 export type ConnectionState = "connecting" | "live" | "reconnecting" | "offline";
 
@@ -22,6 +35,7 @@ export interface UiSlice {
   focusTripId: string | null;
   originsBasis: OriginsBasis;
   horizon: number;
+  forecastTarget: ForecastTarget;
   layers: LayerKey[];
   hoverOrigin: string | null;
   highlightRouteId: string | null;
@@ -56,6 +70,7 @@ export interface LiveActions {
   setFocusTrip(tripId: string | null): void;
   setOriginsBasis(basis: OriginsBasis): void;
   setHorizon(horizon: number): void;
+  setForecastTarget(target: ForecastTarget): void;
   toggleLayer(layer: LayerKey): void;
   setLayers(layers: readonly LayerKey[]): void;
   setHoverOrigin(origin: string | null): void;
@@ -70,11 +85,12 @@ export type LiveState = SimSlice & UiSlice & StatusSlice & LiveActions;
 
 const initialUi: UiSlice = {
   selectedHubId: null,
-  tab: "events",
+  tab: "now",
   previewTripId: null,
   focusTripId: null,
-  originsBasis: "actual",
+  originsBasis: DEFAULT_ORIGINS_BASIS,
   horizon: DEFAULT_HORIZON,
+  forecastTarget: "arrivals",
   layers: [...DEFAULT_LAYERS],
   hoverOrigin: null,
   highlightRouteId: null,
@@ -95,11 +111,9 @@ function pickSim(s: LiveState): SimSlice {
     receivedAt: s.receivedAt,
     epoch: s.epoch,
     lastSeq: s.lastSeq,
-    dispatchEvents: s.dispatchEvents,
-    surges: s.surges,
+    events: s.events,
     trips: s.trips,
     buses: s.buses,
-    hubs: s.hubs,
     resyncing: s.resyncing,
     lastSimTime: s.lastSimTime,
   };
@@ -174,7 +188,7 @@ export const useSim = create<LiveState>()((set, get) => ({
     }
     set({
       selectedHubId: hubId,
-      tab: tab ?? "events",
+      tab: tab ?? "now",
       previewTripId: null,
       focusTripId: null,
       hoverOrigin: null,
@@ -188,6 +202,7 @@ export const useSim = create<LiveState>()((set, get) => ({
   setFocusTrip: (tripId) => set({ focusTripId: tripId }),
   setOriginsBasis: (originsBasis) => set({ originsBasis }),
   setHorizon: (horizon) => set({ horizon }),
+  setForecastTarget: (forecastTarget) => set({ forecastTarget }),
 
   toggleLayer(layer) {
     const layers = get().layers;

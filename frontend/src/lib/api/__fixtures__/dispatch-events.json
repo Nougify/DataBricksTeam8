@@ -1,0 +1,195 @@
+[
+  {
+    "id": "too-many-buses",
+    "hub_id": "ubc",
+    "source_location": "ubc",
+    "location": {
+      "lat": 49.2606,
+      "lon": -123.246
+    },
+    "available_at": null,
+    "actionable_at": "2026-07-10T12:00:00-07:00",
+    "event_time": "2026-07-10T12:00:00-07:00",
+    "mode": "REACTIVE",
+    "surge_type": "EVENT",
+    "predicted_people": 250,
+    "normal_people": 100,
+    "surge_ratio": 2.5,
+    "suggested_extra_buses": 10,
+    "priority_score": 1,
+    "recommendations": [
+      {
+        "destination": "Downtown",
+        "destination_share": 100,
+        "route_id": "fixture-99",
+        "source_route": "99",
+        "extra_bus_trips_est": 9.1,
+        "priority_score": 1,
+        "scheduled_trips_that_hour": null,
+        "extra_people_on_route": null,
+        "avg_daily_boardings": null,
+        "pct_trips_overcrowded": null,
+        "mapping_status": "RESOLVED",
+        "failure_code": null,
+        "failure_reason": null,
+        "candidates": [
+          {
+            "route_id": "fixture-99",
+            "pattern_id": "fixture-pattern-99",
+            "source_stop_id": "UBC1",
+            "destination_stop_id": "ALMA",
+            "source_stop_sequence": 1,
+            "destination_stop_sequence": 2,
+            "direction_id": 0,
+            "requested_service_date": "2026-07-10",
+            "feed_service_date": "2026-07-10",
+            "representative_service": false,
+            "scheduled_trip_ids": [
+              "2026-07-10:fixture-trip-99"
+            ]
+          }
+        ]
+      }
+    ],
+    "status": "AWAITING_APPROVAL",
+    "additional_trip_ids": [
+      "trip-3609908d8c61396c9cce",
+      "trip-beeb9c3dcfa75d03cb86",
+      "trip-a10f8144ef878cbaa1e5"
+    ],
+    "source": {
+      "split": null,
+      "direction": null,
+      "link": null,
+      "version": "development-fixture-v1",
+      "generated_at": "2026-07-10T09:00:00-07:00"
+    }
+  },
+  {
+    "id": "unknown-route",
+    "hub_id": "ubc",
+    "source_location": "ubc",
+    "location": {
+      "lat": 49.2606,
+      "lon": -123.246
+    },
+    "available_at": null,
+    "actionable_at": "2026-07-10T11:00:00-07:00",
+    "event_time": "2026-07-10T11:00:00-07:00",
+    "mode": "REACTIVE",
+    "surge_type": "EVENT",
+    "predicted_people": 250,
+    "normal_people": 100,
+    "surge_ratio": 2.5,
+    "suggested_extra_buses": 1,
+    "priority_score": 1,
+    "recommendations": [
+      {
+        "destination": "Unknown",
+        "destination_share": 100,
+        "route_id": null,
+        "source_route": "missing-route",
+        "extra_bus_trips_est": 1,
+        "priority_score": 1,
+        "scheduled_trips_that_hour": null,
+        "extra_people_on_route": null,
+        "avg_daily_boardings": null,
+        "pct_trips_overcrowded": null,
+        "mapping_status": "INVALID",
+        "failure_code": "UNKNOWN_ROUTE",
+        "failure_reason": "unknown source route: missing-route",
+        "candidates": []
+      }
+    ],
+    "status": "INVALID_SOURCE",
+    "additional_trip_ids": [],
+    "source": {
+      "split": null,
+      "direction": null,
+      "link": null,
+      "version": "development-fixture-v1",
+      "generated_at": "2026-07-10T09:00:00-07:00"
+    }
+  },
+  {
+    "id": "valid-event",
+    "hub_id": "ubc",
+    "source_location": "ubc",
+    "location": {
+      "lat": 49.2606,
+      "lon": -123.246
+    },
+    "available_at": "2026-07-10T09:30:00-07:00",
+    "actionable_at": "2026-07-10T09:30:00-07:00",
+    "event_time": "2026-07-10T10:00:00-07:00",
+    "mode": "PROACTIVE",
+    "surge_type": "EVENT",
+    "predicted_people": 250,
+    "normal_people": 100,
+    "surge_ratio": 2.5,
+    "suggested_extra_buses": 2,
+    "priority_score": 0.9,
+    "recommendations": [
+      {
+        "destination": "Downtown",
+        "destination_share": 60,
+        "route_id": "fixture-99",
+        "source_route": "99",
+        "extra_bus_trips_est": 1.2,
+        "priority_score": 0.9,
+        "scheduled_trips_that_hour": null,
+        "extra_people_on_route": null,
+        "avg_daily_boardings": null,
+        "pct_trips_overcrowded": null,
+        "mapping_status": "RESOLVED",
+        "failure_code": null,
+        "failure_reason": null,
+        "candidates": [
+          {
+            "route_id": "fixture-99",
+            "pattern_id": "fixture-pattern-99",
+            "source_stop_id": "UBC1",
+            "destination_stop_id": "ALMA",
+            "source_stop_sequence": 1,
+            "destination_stop_sequence": 2,
+            "direction_id": 0,
+            "requested_service_date": "2026-07-10",
+            "feed_service_date": "2026-07-10",
+            "representative_service": false,
+            "scheduled_trip_ids": [
+              "2026-07-10:fixture-trip-99"
+            ]
+          }
+        ]
+      },
+      {
+        "destination": "Broadway",
+        "destination_share": 40,
+        "route_id": null,
+        "source_route": "44",
+        "extra_bus_trips_est": 0.5,
+        "priority_score": 0.6,
+        "scheduled_trips_that_hour": null,
+        "extra_people_on_route": null,
+        "avg_daily_boardings": null,
+        "pct_trips_overcrowded": null,
+        "mapping_status": "INVALID",
+        "failure_code": "UNKNOWN_ROUTE",
+        "failure_reason": "unknown source route: 44",
+        "candidates": []
+      }
+    ],
+    "status": "COMPLETED",
+    "additional_trip_ids": [
+      "trip-62051c129ac8e743992b",
+      "trip-344262ecf48ed1918bd9"
+    ],
+    "source": {
+      "split": null,
+      "direction": null,
+      "link": null,
+      "version": "development-fixture-v1",
+      "generated_at": "2026-07-10T09:00:00-07:00"
+    }
+  }
+]

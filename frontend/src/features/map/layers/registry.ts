@@ -19,16 +19,24 @@
 // So: to add a layer, add its module to the right slot below; don't mount GL layers conditionally anywhere.
 // HTML markers (hubs, labels) always sit above the canvas, whatever their position here.
 // Trade-off: our GL overlays draw above the basemap's own labels (DESIGN §8.1 would put rows 1–4 under them).
-import { CatchmentsLayer, CatchmentsLegend } from "./CatchmentsLayer";
 import { BusesLayer, BusesLegend } from "./BusesLayer";
+import { CatchmentsLayer, CatchmentsLegend } from "./CatchmentsLayer";
 import { HubHaloLegend, HubMarkers } from "./HubMarkers";
+import { OriginArcsLayer, OriginBubblesLayer, OriginDotsLegend, OriginLabels, OriginsLegend } from "./OriginsLayers";
 import { TripPathsLayer, TripPathsLegend } from "./TripPathsLayer";
 import type { LayerKey } from "@/lib/live/store";
 import type { MapLayerModule } from "./types";
 
 export const MAP_LAYERS: readonly MapLayerModule[] = [
+  // 1 Routes (M3): RoutesLayer, toggle "routes" (also shown in preview). Legend: need (5 px, casing) / spare (3.5 px).
   { id: "catchments", slot: 2, toggle: "catchments", Gl: CatchmentsLayer, Legend: CatchmentsLegend },
+  // The arcs and dots share the "origin-dots" toggle (off by default); the origin name labels stay on "origins".
+  { id: "origin-arcs", slot: 3, toggle: "origin-dots", Gl: OriginArcsLayer, Legend: OriginsLegend },
+  { id: "origin-labels", slot: 3, toggle: "origins", Html: OriginLabels },
+  { id: "origin-bubbles", slot: 4, toggle: "origin-dots", Gl: OriginBubblesLayer, Legend: OriginDotsLegend },
   { id: "hubs", slot: 5, toggle: null, Html: HubMarkers, Legend: HubHaloLegend },
+  // 6 Surges (M3): SurgesLayer, toggle "surges". Legend: UPCOMING ring / ACTIVE filled / RESOLVED faded.
+  // Trip paths hide the origin arcs while they're drawn (OriginArcsLayer, useTripPathsShown).
   { id: "trip-paths", slot: 7, toggle: "buses", Gl: TripPathsLayer, Legend: TripPathsLegend },
   { id: "buses", slot: 8, toggle: "buses", Html: BusesLayer, Legend: BusesLegend },
 ];

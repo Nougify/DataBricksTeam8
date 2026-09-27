@@ -1,8 +1,8 @@
-// REST client for the backend contract (../../message.txt). Every response is validated against its zod
-// schema (see validateContract); errors in the `{ error: { code, message }, trip? }` shape become ApiError.
+// REST client for the backend contract (../../../../backendspec.md v3). Every response is validated against its
+// zod schema (see validateContract); errors in the `{ error: { code, message } }` shape become ApiError.
 import type { z } from "zod";
 import { ENV } from "@/config/env";
-import { ErrorBody, type AdditionalTrip } from "./schemas";
+import { ErrorBody } from "./schemas";
 import { validateContract } from "./contractIssues";
 import { mocksReady } from "./mockGate";
 
@@ -15,17 +15,14 @@ export interface RequestOptions {
 export class ApiError extends Error {
   /** HTTP status, or 0 when the server couldn't be reached. */
   readonly status: number;
-  /** Contract error code (TRIP_EXPIRED, STALE_EPOCH, OUT_OF_RANGE, ...), or NETWORK / INVALID_RESPONSE / HTTP_<status>. */
+  /** The backend's error code (HTTP_ERROR, NOT_FOUND, VALIDATION_ERROR, ...), or NETWORK / INVALID_RESPONSE / HTTP_<status>. */
   readonly code: string;
-  /** The trip's current state, sent with 409 responses on approve/reject. */
-  readonly trip?: AdditionalTrip;
 
-  constructor(init: { status: number; code: string; message: string; trip?: AdditionalTrip }) {
+  constructor(init: { status: number; code: string; message: string }) {
     super(init.message);
     this.name = "ApiError";
     this.status = init.status;
     this.code = init.code;
-    this.trip = init.trip;
   }
 }
 
@@ -43,7 +40,7 @@ export async function apiGet<T>(
 }
 
 export async function apiSend<T>(
-  method: "POST" | "PUT",
+  method: "POST",
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
@@ -63,7 +60,7 @@ function buildUrl(path: string, params?: QueryParams): string {
 }
 
 async function request<T>(
-  method: "GET" | "POST" | "PUT",
+  method: "GET" | "POST",
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
@@ -122,21 +119,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function toApiError(res: Response, json: unknown, label: string): ApiError {
   const parsed = ErrorBody.safeParse(json);
   if (parsed.success) {
-    const { error, trip } = parsed.data;
-    return new ApiError({ status: res.status, code: error.code, message: error.message, trip });
+    const { error } = parsed.data;
+    return new ApiError({ status: res.status, code: error.code, message: error.message });
   }
 
-  // Not the documented error shape. Keep whatever code and trip we can read so the UI still reacts.
+  // Not the documented error shape. Keep whatever code we can read so the UI still reacts.
   const error = isRecord(json) && isRecord(json.error) ? json.error : null;
   if (error && typeof error.code === "string") {
     validateContract(`${label} (error body)`, ErrorBody, json);
-    const trip = isRecord(json) && isRecord(json.trip) ? (json.trip as AdditionalTrip) : undefined;
     const message = typeof error.message === "string" ? error.message : `Request failed (${res.status}).`;
-    return new ApiError({ status: res.status, code: error.code, message, trip });
+    return new ApiError({ status: res.status, code: error.code, message });
   }
   return new ApiError({
     status: res.status,
     code: `HTTP_${res.status}`,
     message: res.statusText ? `${res.status} ${res.statusText}` : `Request failed (${res.status}).`,
   });
+}
+
+// ---------- approve / reject conflicts ----------
+
+/**
+ * UI copy for a 409 on approve/reject (spec §9.3). The backend sends `HTTP_ERROR` with a plain-English
+ * message and no trip, so known messages map to the spec's wording (DECISIONS.md "2a answers"); anything
+ * else, such as a replanning failure ("arrival is 120 seconds after proactive target"), is shown as sent.
+ */
+export function tripConflictMessage(err: ApiError): string {
+  const m = err.message.toLowerCase();
+  if (m.includes("expired")) return "This proposal expired before approval.";
+  if (m.includes("not proposed")) return "This trip changed state. Showing latest.";
+  if (m.includes("reservation is inconsistent") || m.includes("candidate is missing")) {
+    return "The simulation moved. Refreshing…";
+  }
+  return err.message.charAt(0).toUpperCase() + err.message.slice(1).replace(/\.?$/, ".");
 }

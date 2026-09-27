@@ -15,7 +15,7 @@ export interface SourceNoteProps {
 /** The small "Source: …" line under every KPI, chart and evidence item (spec §1, §4.2 rule 2). */
 export function SourceNote({ source, mock = false, href, className }: SourceNoteProps) {
   return (
-    <p className={cn("text-xs text-muted-foreground", className)}>
+    <p className={cn("text-xs text-muted-foreground [overflow-wrap:anywhere]", className)}>
       Source:{" "}
       {href ? (
         <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">

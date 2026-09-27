@@ -7,7 +7,7 @@ import type { ExpressionSpecification } from "maplibre-gl";
 import { useSim } from "@/lib/live/store";
 import { featureCollection } from "../geo";
 import { LegendRow, LineSwatch } from "../swatches";
-import { tripPathFeatures } from "./tripPaths";
+import { linkedTripIds, tripPathFeatures } from "./tripPaths";
 import type { MapLayerProps } from "./types";
 
 export const TRIP_PATHS_SOURCE = "ov-trip-paths";
@@ -21,17 +21,24 @@ const previewColor = (proposed: string, normal: string): ExpressionSpecification
   normal,
 ];
 
+/** True while the trip-path layer is on and draws at least one path. The origin arcs hide then. */
+export function useTripPathsShown(): boolean {
+  return useSim(
+    (s) =>
+      s.layers.includes("buses") &&
+      tripPathFeatures(Object.values(s.trips), s.previewTripId, s.focusTripId, linkedTripIds(Object.values(s.buses))).length > 0,
+  );
+}
+
 export function TripPathsLayer({ visible, theme }: MapLayerProps) {
   const trips = useSim((s) => s.trips);
   const buses = useSim((s) => s.buses);
   const previewTripId = useSim((s) => s.previewTripId);
   const focusTripId = useSim((s) => s.focusTripId);
-  const data = useMemo(() => {
-    const linked = new Set(
-      Object.values(buses).flatMap((bus) => [bus.assigned_trip_id, bus.proposed_trip_id].filter((id): id is string => id !== null)),
-    );
-    return featureCollection(tripPathFeatures(Object.values(trips), previewTripId, focusTripId, linked));
-  }, [trips, buses, previewTripId, focusTripId]);
+  const data = useMemo(
+    () => featureCollection(tripPathFeatures(Object.values(trips), previewTripId, focusTripId, linkedTripIds(Object.values(buses)))),
+    [trips, buses, previewTripId, focusTripId],
+  );
 
   const layout = useMemo(() => ({ visibility: visible ? ("visible" as const) : ("none" as const) }), [visible]);
   const casingPaint = useMemo(

@@ -1,15 +1,6 @@
-// Pure reducer for the v3 live simulation state: a /state snapshot plus sequenced WebSocket events.
+// Pure reducer for the live simulation state: a /state snapshot plus WebSocket envelopes (backendspec.md §9, v3).
 // It also reports effects (toasts, resync) for the connection layer to act on; it never performs them.
-import type {
-  AdditionalTrip,
-  Bus,
-  Clock,
-  DispatchEvent,
-  HubStatus,
-  StateResponse,
-  Surge,
-  WsMessage,
-} from "@/lib/api/schemas";
+import type { AdditionalTrip, Bus, Clock, DispatchEvent, StateResponse, WsMessage } from "@/lib/api/schemas";
 
 export interface SimSlice {
   clock: Clock | null;
@@ -17,14 +8,11 @@ export interface SimSlice {
   receivedAt: number;
   epoch: number;
   lastSeq: number;
-  dispatchEvents: Record<string, DispatchEvent>;
+  /** Visible dispatch events (actionable at or before the sim time), by id. */
+  events: Record<string, DispatchEvent>;
   trips: Record<string, AdditionalTrip>;
   buses: Record<string, Bus>;
-  /** Retired map compatibility only; the v3 live path never populates these. */
-  surges: Record<string, Surge>;
-  /** Retired map compatibility only; the v3 live path never populates these. */
-  hubs: Record<string, HubStatus>;
-  /** True between a `system.reset` and the /state snapshot that follows it. */
+  /** True between a `system.reset` (or a sequence gap) and the /state snapshot that follows it. */
   resyncing: boolean;
   /** simulation_time of the last applied message, for "Showing data as of …" notes. */
   lastSimTime: string | null;
@@ -33,7 +21,9 @@ export interface SimSlice {
 export type SimEffect =
   | { kind: "trip-proposed"; trip: AdditionalTrip }
   | { kind: "auto-paused" }
+  | { kind: "event-new"; event: DispatchEvent }
   | { kind: "trip-expired"; trip: AdditionalTrip }
+  | { kind: "system-error"; message: string }
   | { kind: "reset"; epoch: number };
 
 export const emptySim: SimSlice = {
@@ -41,11 +31,9 @@ export const emptySim: SimSlice = {
   receivedAt: 0,
   epoch: 0,
   lastSeq: 0,
-  dispatchEvents: {},
+  events: {},
   trips: {},
   buses: {},
-  surges: {},
-  hubs: {},
   resyncing: false,
   lastSimTime: null,
 };
@@ -64,11 +52,9 @@ export function applySnapshot(s: SimSlice, state: StateResponse, wallNow: number
     receivedAt: wallNow,
     epoch: state.epoch,
     lastSeq: state.last_seq,
-    dispatchEvents: indexBy(state.dispatch_events, (x) => x.id),
+    events: indexBy(state.dispatch_events, (x) => x.id),
     trips: indexBy(state.additional_trips, (x) => x.id),
     buses: indexBy(state.buses, (x) => x.id),
-    surges: {},
-    hubs: {},
     resyncing: false,
     lastSimTime: state.simulation.current_time,
   };
@@ -77,10 +63,11 @@ export function applySnapshot(s: SimSlice, state: StateResponse, wallNow: number
 const NO_EFFECTS: SimEffect[] = [];
 
 /**
- * Applies one message. Filtering rules:
+ * Applies one message. Filtering rules (backendspec.md §9):
  * - `system.reset` applies whenever its `data.epoch` is newer than ours: set resyncing and emit `reset`.
  * - Otherwise drop it if its epoch is older than ours, or its seq is at or below lastSeq.
- * - A non-reset message from a newer epoch means we missed the reset; it triggers one too.
+ * - A non-reset message from a newer epoch means we missed the reset, and a seq gap means we missed messages;
+ *   both trigger a resync.
  */
 export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { sim: SimSlice; effects: SimEffect[] } {
   if (msg.type === "system.reset") {
@@ -109,19 +96,24 @@ export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { si
       return { sim: { ...base, clock, receivedAt: wallNow }, effects };
     }
     case "system.error":
-      return { sim: base, effects: NO_EFFECTS };
-    case "dispatch_event.updated":
+      return { sim: base, effects: [{ kind: "system-error", message: msg.data.message }] };
+    case "dispatch_event.updated": {
+      const event = msg.data;
+      const isNew = !(event.id in s.events);
       return {
-        sim: { ...base, dispatchEvents: { ...s.dispatchEvents, [msg.data.id]: msg.data } },
-        effects: NO_EFFECTS,
+        sim: { ...base, events: { ...s.events, [event.id]: event } },
+        effects: isNew ? [{ kind: "event-new", event }] : NO_EFFECTS,
       };
+    }
     case "proposal.created":
     case "proposal.updated":
     case "trip.updated": {
       const trip = msg.data;
       const prev = s.trips[trip.id];
       const effects: SimEffect[] = [];
-      if (msg.type === "proposal.created" && prev?.status !== "PROPOSED") effects.push({ kind: "trip-proposed", trip });
+      if (msg.type === "proposal.created" && trip.status === "PROPOSED" && prev?.status !== "PROPOSED") {
+        effects.push({ kind: "trip-proposed", trip });
+      }
       if (trip.status === "EXPIRED" && prev?.status !== "EXPIRED") effects.push({ kind: "trip-expired", trip });
       return { sim: { ...base, trips: { ...s.trips, [trip.id]: trip } }, effects };
     }
@@ -133,7 +125,7 @@ export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { si
 export interface ApplyResult {
   sim: SimSlice;
   effects: SimEffect[];
-  /** Messages after a reset (including the one that revealed a newer epoch); they wait for the next snapshot. */
+  /** Messages after a reset (including the one that revealed a newer epoch or a gap); they wait for the next snapshot. */
   remaining: WsMessage[];
 }
 
@@ -147,11 +139,7 @@ export function applyMessages(s: SimSlice, msgs: readonly WsMessage[], wallNow: 
     sim = result.sim;
     effects.push(...result.effects);
     if (result.effects.some((e) => e.kind === "reset")) {
-      return {
-        sim,
-        effects,
-        remaining: msgs.slice(msg.type === "system.reset" ? i + 1 : i),
-      };
+      return { sim, effects, remaining: msgs.slice(msg.type === "system.reset" ? i + 1 : i) };
     }
   }
   return { sim, effects, remaining: [] };

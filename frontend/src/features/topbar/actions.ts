@@ -4,8 +4,8 @@
 // so failures are reported here in one consistent form: "Couldn't <action>." plus the server's message.
 import { useState } from "react";
 import { toast } from "sonner";
-import { useMeta, usePause, useSeek, useSetSpeed } from "@/lib/api/hooks";
-import type { Preset } from "@/lib/api/schemas";
+import { DEFAULT_START_TIME, type Preset } from "@/config/scenario";
+import { usePause, useSeek, useSetSpeed } from "@/lib/api/hooks";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { useSim, type HubTab } from "@/lib/live/store";
 import { ENV } from "@/config/env";
@@ -20,7 +20,7 @@ export function toastFailure(action: string, err: unknown): void {
 export interface JumpOptions {
   /** Select this hub after the seek (null shows the network overview). Leave out to keep the selection. */
   hubId?: string | null;
-  /** Tab to open when a hub is selected. Default "events". */
+  /** Tab to open when a hub is selected. Default "now". */
   tab?: HubTab;
   /** Names the target in an error toast ("jump to UBC exam weekend"). */
   label?: string;
@@ -34,7 +34,7 @@ export function useJumpTo() {
       onSuccess: () => {
         if ("hubId" in opts) {
           const hubId = opts.hubId ?? null;
-          useSim.getState().selectHub(hubId, hubId ? (opts.tab ?? "events") : undefined);
+          useSim.getState().selectHub(hubId, hubId ? (opts.tab ?? "now") : undefined);
         }
         onDone?.();
       },
@@ -44,26 +44,29 @@ export function useJumpTo() {
   return { jump, isPending: seek.isPending };
 }
 
-/** Choosing a preset seeks to its time and selects its hub on Events, or shows the overview. */
+/** Choosing a preset seeks to its time and selects its hub on the Now tab, or shows the overview (spec §6). */
 export function usePresetJump() {
   const { jump, isPending } = useJumpTo();
   const jumpToPreset = (preset: Preset) =>
-    jump(preset.time, { hubId: preset.hub_id, tab: "events", label: preset.label });
+    jump(preset.time, { hubId: preset.hub_id, tab: "now", label: preset.label });
   return { jumpToPreset, isPending };
 }
 
 /**
- * Reset demo (spec §6): pause, seek to `/meta.default_start_time`, set speed 60, clear the selection and
- * close any preview. Pausing first means the clock can't drift past the start time while the seek runs.
+ * Reset demo (spec §6): pause, seek to DEFAULT_START_TIME (clamped into the clock's bounds, since a backend may
+ * serve a narrower window), set speed 60, clear the selection and close any preview. Pausing first means the
+ * clock can't drift past the start time while the seek runs.
  */
 export function useResetDemo() {
-  const meta = useMeta();
-  const hasClock = useSim((s) => s.clock !== null);
+  // Select primitives: a selector returning a fresh array would re-render forever.
+  const minTime = useSim((s) => s.clock?.min_time ?? null);
+  const maxTime = useSim((s) => s.clock?.max_time ?? null);
+  const hasClock = minTime !== null && maxTime !== null;
   const pause = usePause();
   const seek = useSeek();
   const setSpeed = useSetSpeed();
   const [pending, setPending] = useState(false);
-  const target = meta.data?.default_start_time ?? null;
+  const target = hasClock ? clampTime(DEFAULT_START_TIME, minTime, maxTime) : null;
 
   const reset = async () => {
     if (!target || pending) return;
@@ -88,6 +91,13 @@ export function useResetDemo() {
   };
 
   return { reset: () => void reset(), pending, disabled: !target || !hasClock || pending };
+}
+
+function clampTime(time: string, min: string, max: string): string {
+  const t = Date.parse(time);
+  if (t < Date.parse(min)) return min;
+  if (t > Date.parse(max)) return max;
+  return time;
 }
 
 /** Dev only, mock mode only: closes the fake WebSocket so reconnect handling can be exercised (spec §12.3). */

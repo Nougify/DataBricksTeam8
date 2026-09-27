@@ -4,6 +4,7 @@
 import { Marker } from "react-map-gl/maplibre";
 import { useSimNow } from "@/lib/live/clock";
 import { useSim } from "@/lib/live/store";
+import { tripHub } from "@/lib/live/trips";
 import { DIM_FACTOR } from "../dim";
 import { BusSwatch, LegendRow } from "../swatches";
 import { busVisual } from "./busPresentation";
@@ -23,7 +24,7 @@ export function BusesLayer({ visible, dimmed, theme }: MapLayerProps) {
   const previewTripId = useSim((s) => s.previewTripId);
   const focusTripId = useSim((s) => s.focusTripId);
   const setFocusTrip = useSim((s) => s.setFocusTrip);
-  const setTab = useSim((s) => s.setTab);
+  const selectHub = useSim((s) => s.selectHub);
 
   if (!visible) return null;
 
@@ -51,8 +52,11 @@ export function BusesLayer({ visible, dimmed, theme }: MapLayerProps) {
           title={label}
           onClick={() => {
             if (!tripId) return;
+            // Open the trip's hub on Dispatch. selectHub clears the focus, so focus afterwards.
+            const trip = trips[tripId];
+            const hubId = trip ? tripHub(trip, useSim.getState().events) : null;
+            if (hubId) selectHub(hubId, "dispatch");
             setFocusTrip(tripId);
-            setTab("trips");
           }}
           className="flex cursor-pointer items-center justify-center rounded-sm transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           style={{ width: visual.size + 8, height: visual.size + 8, opacity: markerOpacity }}

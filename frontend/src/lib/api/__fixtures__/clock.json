@@ -1,12 +1,12 @@
 {
-  "current_time": "2025-12-06T10:00:00-08:00",
-  "local_date": "2025-12-06",
-  "hour": 10,
-  "speed": 60,
-  "status": "PAUSED",
-  "min_time": "2025-11-15T00:00:00-08:00",
-  "max_time": "2026-08-31T23:00:00-07:00",
+  "current_time": "2026-07-10T09:00:00-07:00",
+  "local_date": "2026-07-10",
+  "hour": 9,
+  "speed": 3600,
+  "status": "RUNNING",
+  "min_time": "2026-07-10T09:00:00-07:00",
+  "max_time": "2026-07-10T15:00:00-07:00",
   "approval_mode": "MANUAL",
   "auto_pause_on_proposal": true,
-  "epoch": 3
+  "epoch": 0
 }

@@ -2,17 +2,18 @@
 // both ways with the store through history.replaceState, so there is no router navigation. An optional
 // `t` (sim time) never seeks by itself; it lands in `pendingLinkTime` for a "Jump there?" banner.
 import { useEffect } from "react";
-import type { OriginsBasis } from "@/lib/api/schemas";
 import { toVancouverIso } from "@/lib/time";
 import {
   DEFAULT_HORIZON,
   DEFAULT_LAYERS,
+  DEFAULT_ORIGINS_BASIS,
   HUB_TABS,
   LAYER_KEYS,
   useSim,
   type HubTab,
   type LayerKey,
   type LiveState,
+  type OriginsBasis,
 } from "@/lib/live/store";
 
 const P = { hub: "hub", tab: "tab", basis: "basis", horizon: "h", layers: "layers", time: "t" } as const;
@@ -46,7 +47,7 @@ export function parseUrlState(search: string): UrlUiState {
   return {
     hub: hub && /^[a-z0-9-]+$/.test(hub) ? hub : null,
     tab: tab && isHubTab(tab) ? tab : null,
-    basis: basis === "actual" || basis === "typical" ? basis : null,
+    basis: basis === "typical" || basis === "all" ? basis : null,
     horizon: Number.isInteger(h) && h > 0 && h <= 48 ? h : null,
     layers: layers === null ? null : layers.split(",").filter(isLayer),
     time: Number.isFinite(tMs) ? toVancouverIso(tMs) : null,
@@ -64,8 +65,8 @@ export function serializeUrlState(search: string, s: UrlSource): string {
   const put = (key: string, value: string | null) => (value === null ? q.delete(key) : q.set(key, value));
 
   put(P.hub, s.selectedHubId);
-  put(P.tab, s.tab !== "events" ? s.tab : null);
-  put(P.basis, s.originsBasis !== "actual" ? s.originsBasis : null);
+  put(P.tab, s.selectedHubId && s.tab !== "now" ? s.tab : null);
+  put(P.basis, s.originsBasis !== DEFAULT_ORIGINS_BASIS ? s.originsBasis : null);
   put(P.horizon, s.horizon !== DEFAULT_HORIZON ? String(s.horizon) : null);
   put(P.layers, sameLayers(s.layers, DEFAULT_LAYERS) ? null : LAYER_KEYS.filter((l) => s.layers.includes(l)).join(","));
   // `t` is only ever cleared here (after the banner is answered); it is never written from the live clock.
@@ -77,8 +78,8 @@ export function serializeUrlState(search: string, s: UrlSource): string {
 
 function applyToStore(url: UrlUiState) {
   const s = useSim.getState();
-  s.selectHub(url.hub, url.tab ?? "events");
-  s.setOriginsBasis(url.basis ?? "actual");
+  s.selectHub(url.hub, url.hub ? (url.tab ?? "now") : undefined);
+  s.setOriginsBasis(url.basis ?? DEFAULT_ORIGINS_BASIS);
   s.setHorizon(url.horizon ?? DEFAULT_HORIZON);
   if (!sameLayers(url.layers ?? DEFAULT_LAYERS, s.layers)) s.setLayers(url.layers ?? DEFAULT_LAYERS);
   s.setPendingLinkTime(url.time);

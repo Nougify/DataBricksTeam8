@@ -17,7 +17,7 @@ export function useDimmed(): boolean {
 export function usePreviewHubId(): string | null {
   return useSim((s) => {
     const trip = s.previewTripId ? s.trips[s.previewTripId] : undefined;
-    return trip ? (s.dispatchEvents[trip.dispatch_event_id]?.hub_id ?? null) : null;
+    return trip ? (s.events[trip.dispatch_event_id]?.hub_id ?? null) : null;
   });
 }
 

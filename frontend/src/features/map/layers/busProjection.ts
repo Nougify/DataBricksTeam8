@@ -1,7 +1,7 @@
-import type { AdditionalTrip, Bus, LatLon, MovementLeg } from "@/lib/api/schemas";
+import type { AdditionalTrip, Bus, GeoPoint, MovementLeg } from "@/lib/api/schemas";
 
 export interface ProjectedBusPosition {
-  location: LatLon;
+  location: GeoPoint;
   heading_deg: number | null;
 }
 
@@ -71,7 +71,7 @@ function projectLeg(leg: MovementLeg, start: string, end: string, atMs: number):
 
 /** Mirrors the backend's read-time projection without mutating authoritative bus state. */
 export function projectBusPosition(bus: Bus, trip: AdditionalTrip | undefined, atMs: number): ProjectedBusPosition {
-  const fallback = { location: bus.location, heading_deg: bus.heading_deg };
+  const fallback = { location: bus.location, heading_deg: bus.heading_deg ?? null };
   if (!Number.isFinite(atMs) || !trip?.movement_plan || bus.assigned_trip_id !== trip.id) return fallback;
 
   const plan = trip.movement_plan;

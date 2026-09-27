@@ -81,3 +81,19 @@ All Milestone 1 automated checks pass:
 
 ## Request for Clarification
 Please answer the questions listed in each issue section to proceed with confident implementation. If any assumptions are acceptable, indicate so; otherwise, we will await your feedback before implementing changes.
+
+
+## Changes Made by Codex (as of 2026-09-26)
+* web/src/features/topbar/StatusControls.tsx – Fixed React getServerSnapshot error by replacing problematic useSyncExternalStore call in useThemeChoice() with direct useTheme() usage, resolving hydration mismatch while preserving theme functionality.
+* web/src/features/map/layers/HubMarkers.tsx – Adjusted hub label for Park Royal to avoid overlap with CARTO's "West Vancouver" label (style={{ marginTop: hub.id === 'park-royal' ? '-2px' : 0 }}).
+* web/src/features/shell/Console.tsx – Set minimum height of 200px for phone map view (added min-h-[200px] to map section className) and fixed duplicate <section aria-label="Map"> line that caused JSX parsing error.
+* spec.md – Added Implementation Status section summarizing completed work and checklist.
+* web/src/mocks/handlers/read.ts – Verified Park Royal mismatch percentage is correctly set to 11.5%; confirmed no outdated 0.6% references remain related to mismatch (remaining "0.6%" is only for halo ring opacity styling).
+
+## Milestone 2b (2026-09-27, Claude): network overview, Now, Origins, timeline
+
+- **Built in `frontend/`:** the network overview (hub cards, approval queue with Approve/Reject, active extra trips, surges away from the hubs, scorecard strip); the hub panel header and tabs; Now (arrivals/departures, KPIs, forecast chart with a ±6/12/24 h window and dispatch-event markers, driver chips, "Did it happen?", scorecard badge); Origins (typical hour / whole dataset, insight callout, ranked list, surge destinations) with map arcs, bubbles and labels; and the timeline scrubber (lanes, surge days, actionable dispatch days, exam/holiday strip, drag and keyboard seek).
+- **Decisions:** `frontend/DECISIONS.md` "2b answers" (the Origins basis, no Preview until M3, timeline dispatch markers from `feed_days.json`, and defaults chosen without asking). Module map: `frontend/ARCHITECTURE.md` "Milestone 2b UI".
+- **Interim:** the Dispatch tab shows the hub's queue and active trips until M3. Routes, Late night, Planner and Findings show "arrives in milestone 4".
+- **Known data quirk worth a line in the pitch:** the dispatch feed's surge index (30-min slots, `surge_recommendations_backtest`) and the hourly forecast snapshot's index (`surge_forecast_hourly`) are different models on different scales. At UBC Sat Dec 6 11:30, "Next surge" says peak 1.80× while the chart title says 1.36×. Both carry their source line, and nothing is rescaled (per DECISIONS).
+- **Checks:** lint, typecheck, unit tests, build, Playwright smoke (3 tests) and screenshots (`frontend/screenshots/latest/`).

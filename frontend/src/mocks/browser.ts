@@ -1,7 +1,7 @@
 // Mock-mode bootstrap (spec §12): the MSW service worker for REST plus the MockSim singleton and its 250 ms timer.
 // Loaded only through dynamic imports (lib/api/mockGate.ts, lib/live/createTransport.ts), so none of it ships
 // when NEXT_PUBLIC_USE_MOCKS is off.
-import { getMockSim, startMockSimTimer } from "./sim/instance";
+import { getMockSim, mockSimReady, startMockSimTimer } from "./sim/instance";
 
 let started: Promise<void> | null = null;
 
@@ -15,7 +15,7 @@ export function startMocks(): Promise<void> {
       quiet: true,
       serviceWorker: { url: "/mockServiceWorker.js" },
     });
-    getMockSim();
+    await mockSimReady();
     startMockSimTimer();
   })().catch((err: unknown) => {
     started = null;

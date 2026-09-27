@@ -1,13 +1,24 @@
 [
   {
-    "route_id": "6612",
+    "route_id": "fixture-99",
     "line_key": "99",
     "short_name": "99",
-    "long_name": "Commercial-Broadway / UBC (B-Line)",
+    "long_name": "Commercial-Broadway / UBC",
     "mode": "Bus",
     "color": "#0060A9",
     "text_color": "#FFFFFF",
-    "serves_hub_ids": ["ubc"],
-    "shape": { "type": "LineString", "coordinates": [] }
+    "shape": {
+      "type": "LineString",
+      "coordinates": [
+        [
+          -123.246,
+          49.261
+        ],
+        [
+          -123.185,
+          49.2635
+        ]
+      ]
+    }
   }
 ]

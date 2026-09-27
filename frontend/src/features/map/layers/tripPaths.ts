@@ -1,5 +1,5 @@
 import type { Feature, LineString } from "geojson";
-import type { AdditionalTrip, MovementLeg } from "@/lib/api/schemas";
+import type { AdditionalTrip, Bus, MovementLeg } from "@/lib/api/schemas";
 import { DIM_FACTOR } from "../dim";
 
 export interface TripPathProperties {
@@ -61,4 +61,14 @@ export function tripPathFeatures(
   }
 
   return features;
+}
+
+/** Ids of trips a bus is assigned to or proposed for. */
+export function linkedTripIds(buses: Iterable<Bus>): Set<string> {
+  const ids = new Set<string>();
+  for (const bus of buses) {
+    if (bus.assigned_trip_id) ids.add(bus.assigned_trip_id);
+    if (bus.proposed_trip_id) ids.add(bus.proposed_trip_id);
+  }
+  return ids;
 }

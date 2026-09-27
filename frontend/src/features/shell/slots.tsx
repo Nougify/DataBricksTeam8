@@ -1,34 +1,15 @@
 "use client";
 
-import { ChevronLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { OperationsPanel } from "@/features/operations";
-import { hubDisplayName } from "@/lib/live/effects";
-import { useSim } from "@/lib/live/store";
+// The side panel's two views: the network overview (spec §8) and the hub panel with its tabs (spec §9). Each view
+// owns its scrolling: SidePanel gives it a column of fixed height on desktop and tablet, so a header and tab strip
+// can stay pinned above a scrolling body; on phone the page scrolls instead.
+import { HubPanel } from "@/features/hub/HubPanel";
+import { NetworkOverview } from "@/features/overview/NetworkOverview";
 
 export function NetworkOverviewSlot() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 pt-4 md:px-4">
-      <h2 className="pr-10 font-heading text-lg leading-tight font-semibold">Network overview</h2>
-      <p className="mt-1 mb-3 text-sm text-muted-foreground">Live operational decisions across all dispatch locations.</p>
-      <OperationsPanel />
-    </div>
-  );
+  return <NetworkOverview />;
 }
 
 export function HubPanelSlot({ hubId }: { hubId: string }) {
-  const selectHub = useSim((s) => s.selectHub);
-  const name = hubDisplayName(hubId);
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 pt-4 md:px-4">
-      <Button variant="ghost" size="sm" className="-ml-2 self-start" onClick={() => selectHub(null)}>
-        <ChevronLeft aria-hidden />
-        All hubs
-      </Button>
-      <h2 className="mt-1 pr-10 font-heading text-2xl leading-7 font-semibold">{name}</h2>
-      <p className="mt-1 mb-3 text-sm text-muted-foreground">Dispatch events and service actions for this hub.</p>
-      <OperationsPanel hubId={hubId} />
-    </div>
-  );
+  return <HubPanel hubId={hubId} />;
 }

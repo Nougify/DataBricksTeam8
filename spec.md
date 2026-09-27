@@ -936,7 +936,41 @@ web/
    - MockSim skeleton, MSW and fake WS
    - top bar with the clock and controls
    - map with the basemap, offline fallback and hub markers
-2. **Understand demand:** network overview; Now tab with the forecast chart; Origins tab with arcs; timeline scrubber.
+2. **Understand demand.** Build in `frontend/`, following the v3 section of `frontend/DECISIONS.md`, which overrides this spec where they differ.
+   - **2a. Move to the v3 contract** (prerequisite for the UI):
+     1. **Bundle the real data from Databricks** (read-only, `--profile DEFAULT`, catalog `rgersxdatabricks_hackathon`). Snapshot these as compact bundled JSON, lazy-loaded per hub or month:
+        - `model.surge_forecast_hourly`: hourly actual / forecast / typical
+        - `model.surge_model_metrics`: scorecard
+        - `model.surge_recommendations_backtest`: the dispatch-event feed, mapped to v3 field names
+
+        Timestamps are Vancouver wall time stored as UTC. Compute each preset time (30 min before the first `available_at` of that day's peak-surge episode) and record it in `DECISIONS.md`.
+     2. **Move the analytics snapshots out of `mocks/`.** Origins, daily timeline, exam/holiday events, validation, hubs and presets go into a shared location that both mock and real mode read.
+     3. **Rewrite the zod schemas to v3.**
+        - Required: DispatchEvent, AdditionalTrip, Bus, Clock, `/state`, and the WS envelopes (`clock.updated`, `dispatch_event.updated`, `proposal.created`, `proposal.updated`, `trip.updated`, `bus.updated`, `system.reset`, `system.error`).
+        - Optional: the real backend's extras (`movement_plan`, `heading_deg`, `Clock.auto_pause_on_proposal`, …).
+        - Update the test fixtures from `backendspec.md`.
+     4. **Update the API client and hooks** for `POST /clock/pause|resume|speed|seek` and `{error:{code,message}}`. Remove the v2-only endpoints.
+     5. **Update the live layer for v3:**
+        - WS at `/ws`, whose first frame is the `/state` snapshot
+        - the new event types
+        - `system.reset` triggers a refetch of `/state`
+        - epoch/seq filtering as before
+     6. **Rewrite MockSim to mirror the backend's rules:**
+        - events activate at `actionable_at` (proactive when `available_at` is set)
+        - the top-priority recommendation whose route exists wins; bus count = `ceil(extra_bus_trips_est)`, capped at 3 per event and by free buses
+        - 30 sim-min approval timeout; auto-pause on proposal; reject or expiry releases the bus
+        - the fleet mirrors `backend/config/fleet.json`
+        - seek is deterministic
+
+        Mock routes include every real GTFS route the bundled feed names (49, 4, R4, 25, 99, 14, 84, 33, …).
+     7. **Rebuild the MSW handlers and fake WS** on the new MockSim. Adapt the M1 UI (top bar, hub markers) to v3. Auto-pause becomes a read-only indicator.
+     8. **Checks:** lint, typecheck, tests, build. Run a smoke test against the real backend with `docker compose up --build`.
+   - **2b. UI:**
+     - **Network overview.** Hub cards, the approval queue, active extra trips, and non-hub events come from DispatchEvents grouped into display-only surge episodes. The scorecard strip comes from `surge_model_metrics` at 60 min lead.
+     - **Now tab.** Real forecast chart with an arrivals/departures toggle (default arrivals), a 6 / 12 / 24 h window selector, and no 80% band. Visible dispatch events are overlaid as markers, not rescaled into the line.
+     - **Origins tab.** Arcs from the bundled origins. "Where the surge crowd is headed" comes from the event's recommendations, with destinations matched to `dim_origin` case- and space-insensitively.
+     - **Timeline scrubber.** Bundled retrospective surge days and event bands, plus dispatch events that have already become actionable. Never show future events.
+     - **Checks** plus screenshots at 1440, 1024 and 390 px in light and dark.
 3. **Act:** the full dispatch flow (proposals, preview, approve/reject, toasts, auto-pause, bus animation, resolution) and the UBC scenario end to end.
 4. **Depth and proof:** Routes, Late night, Planner (port), Findings, the About modal with scorecard and validation, and the remaining mock scenarios.
 5. **Polish:** responsive layouts, accessibility pass, the states audit, performance at 3600x, a screenshot critique, `web/README.md`, Dockerfile and the compose service.
@@ -960,22 +994,3 @@ web/
 - **Backend blocking items:** until they land (hourly forecast backtest, hourly surge index, approval, seek), the real-backend demo can't run. Mock mode covers development.
 - **Product name:** TBD. Change it only in `web/src/config/app.ts`.
 - **PMTiles extract:** has to be generated once with internet access (section 7.1).
- 
- # #   I m p l e m e n t a t i o n   S t a t u s :   F i x e d   g e t S e r v e r S n a p s h o t   e r r o r   i n   S t a t u s C o n t r o l s . t s x ,   a d j u s t e d   P a r k   R o y a l   l a b e l   t o   a v o i d   o v e r l a p ,   s e t   p h o n e   m a p   m i n i m u m   h e i g h t   t o   2 0 0 p x .  
-  
- # #   2 2 .   I m p l e m e n t a t i o n   S t a t u s   ( a s   o f   2 0 2 6 - 0 9 - 2 6 )  
-  
- T h e   f o l l o w i n g   i t e m s   f r o m   h a n d o f f . m d   h a v e   b e e n   c o m p l e t e d :  
-  
- -   [ x ]   F i x e d   R e a c t   g e t S e r v e r S n a p s h o t   e r r o r   i n   S t a t u s C o n t r o l s . t s x   b y   r e p l a c i n g   p r o b l e m a t i c   u s e S y n c E x t e r n a l S t o r e   c a l l   w i t h   d i r e c t   u s e   o f   u s e T h e m e ( ) .  
- -   [ x ]   V e r i f i e d   t h a t   P a r k   R o y a l   m i s m a t c h   p e r c e n t a g e   i s   c o r r e c t l y   s e t   t o   1 1 . 5 %   i n   m o c k   d a t a   ( n o   o u t d a t e d   0 . 6 %   r e f e r e n c e s   r e m a i n   r e l a t e d   t o   m i s m a t c h ) .  
- -   [ x ]   A d j u s t e d   h u b   l a b e l   f o r   P a r k   R o y a l   t o   a v o i d   o v e r l a p   w i t h   C A R T O ' s   \  
- W e s t  
- V a n c o u v e r \   l a b e l   b y   s h i f t i n g   t h e   l a b e l   u p w a r d   b y   2 p x .  
- -   [ x ]   S e t   m i n i m u m   h e i g h t   o f   2 0 0 p x   f o r   t h e   p h o n e   m a p   v i e w   t o   e n s u r e   u s a b i l i t y   o n   s m a l l   s c r e e n s .  
- -   [ x ]   F i x e d   d u p l i c a t e   M a p   s e c t i o n   a n d   J S X   p a r s i n g   e r r o r   i n   C o n s o l e . t s x .  
- -   [   ]   B o x i n g   D a y   e x t r a   t r i p   s t o p :   c o n f i r m e d   t h a t   e i t h e r   P h i b b s   E x c h a n g e   s t o p   o r   l a s t   N o r t h   V a n c o u v e r   s t o p   i s   a c c e p t a b l e   p e r   u s e r   f e e d b a c k ;   n o   c h a n g e s   n e e d e d   a s   s i m u l a t i o n   a l r e a d y   u s e s   P h i b b s   E x c h a n g e   s t o p   ( s t o p   I D   \  
- 4 4 6 1 \ ) .  
-  
- N o t e :   T h e   l i n t   w a r n i n g   ( u n u s e d   e s l i n t - d i s a b l e   d i r e c t i v e   i n   p u b l i c / m o c k S e r v i c e W o r k e r . j s )   a n d   b u i l d   w a r n i n g   ( f o n t   o v e r r i d e   v a l u e s   f o r   A t k i n s o n   H y p e r l e g i b l e   N e x t )   r e m a i n   t o   b e   a d d r e s s e d .  
- 

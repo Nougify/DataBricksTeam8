@@ -92,9 +92,10 @@ const noopSubscribe = () => () => {};
 /** The stored theme choice; "system" during SSR and hydration so the markup matches. */
 export function useThemeChoice(): [ThemeChoice, (value: string) => void] {
   const { theme, setTheme } = useTheme();
-  // During SSR, useTheme returns "system" as the theme value
-  // So we can just return that directly without the incorrect useSyncExternalStore
-  const choice: ThemeChoice = (theme === "light" || theme === "dark" || theme === "system") ? theme : "system";
+  // next-themes reads localStorage on the client's first render, so gate on hydration.
+  // The third argument (server snapshot) is what the old version was missing.
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  const choice: ThemeChoice = hydrated && (theme === "light" || theme === "dark") ? theme : "system";
   return [choice, setTheme];
 }
 

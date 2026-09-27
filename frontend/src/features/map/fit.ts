@@ -6,7 +6,7 @@
 //
 //   network            → METRO_BOUNDS (the three hubs and the eastern origins)
 //   hub selected       → the hub (+ its origins with share ≥ 2% from milestone 2; see camera.tsx)
-//   preview (M3)       → the trip's deadhead and service paths and both routes
+//   trip preview       → the trip's deadhead, service and return paths (camera.tsx)
 import { useEffect, useRef, useState } from "react";
 import { useMap } from "react-map-gl/maplibre";
 import type { PaddingOptions } from "maplibre-gl";
@@ -40,6 +40,20 @@ export interface FitTarget {
   /** Keep at least this many metres around the centre, so a single hub doesn't zoom to street level. */
   minRadiusM?: number;
   maxZoom?: number;
+  /** Extra pixels on every side, e.g. so a hub's halo (up to 60 px) isn't cut when the hub sits at the edge. */
+  extraPadding?: number;
+}
+
+/** fitPadding plus a target's extra padding. */
+function targetPadding(target: FitTarget, container: HTMLElement | null, occludedRight: number): PaddingOptions {
+  const p = fitPadding(container, occludedRight);
+  const e = target.extraPadding ?? 0;
+  if (e <= 0) return p;
+  const w = container?.clientWidth ?? 0;
+  const h = container?.clientHeight ?? 0;
+  // Only when the map has room for it (not on a small phone map).
+  if (w < 640 || h < 360) return p;
+  return { top: (p.top ?? 0) + e, right: (p.right ?? 0) + e, bottom: (p.bottom ?? 0) + e, left: (p.left ?? 0) + e };
 }
 
 export const NETWORK_FIT: FitTarget = { key: "network", points: METRO_BOUNDS };
@@ -125,7 +139,7 @@ export function useMapFit(target: FitTarget | null, container: HTMLElement | nul
     if (!bounds) return;
     userMoved.current = false;
     mapRef.fitBounds(bounds, {
-      padding: fitPadding(container, occludedRight),
+      padding: targetPadding(target, container, occludedRight),
       maxZoom: target.maxZoom ?? DEFAULT_MAX_ZOOM,
       duration: first || prefersReducedMotion() ? 0 : FIT_DURATION_MS,
     });
@@ -142,7 +156,7 @@ export function useMapFit(target: FitTarget | null, container: HTMLElement | nul
       const { target: t, container: c, occludedRight: o } = latest.current;
       if (userMoved.current || !t) return;
       const bounds = boundsOf(t.points, t.minRadiusM);
-      if (bounds) map.fitBounds(bounds, { padding: fitPadding(c, o), maxZoom: t.maxZoom ?? DEFAULT_MAX_ZOOM, duration: 0 });
+      if (bounds) map.fitBounds(bounds, { padding: targetPadding(t, c, o), maxZoom: t.maxZoom ?? DEFAULT_MAX_ZOOM, duration: 0 });
     };
     map.on("movestart", onMoveStart);
     map.on("resize", onResize);
