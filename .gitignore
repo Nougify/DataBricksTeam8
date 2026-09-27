@@ -1,2 +1,14 @@
 *.pyc
 .env
+
+# Node / Next.js build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.env*.local
+
+# Playwright
+test-results/
+playwright-report/
