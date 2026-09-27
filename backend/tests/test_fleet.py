@@ -140,7 +140,7 @@ def test_coordinator_reset_restores_immutable_configured_fleet(tmp_path: Path) -
                 update={
                     "location": GeoPoint(lat=49.0, lon=-123.0),
                     "heading_deg": 45.0,
-                    "status": BusStatus.WAITING,
+                    "status": BusStatus.REPOSITIONING,
                 }
             )
         )

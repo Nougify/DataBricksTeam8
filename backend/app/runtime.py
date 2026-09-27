@@ -8,6 +8,7 @@ from app.services.activation import EventActivationService
 from app.services.clock import SimulationClockController
 from app.services.coordinator import MutationCoordinator
 from app.services.events import EventSink
+from app.services.movement import MovementLifecycleService
 from app.services.proposals import ProposalService
 from app.transit.index import TransitIndex
 
@@ -25,5 +26,6 @@ class RuntimeOwner:
     coordinator: MutationCoordinator
     clock: SimulationClockController
     activation: EventActivationService
+    movement: MovementLifecycleService
     proposals: ProposalService
     events: EventSink

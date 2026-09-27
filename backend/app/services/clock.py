@@ -244,6 +244,23 @@ class SimulationClockController:
                 raise ValueError("seek handler is already configured")
             self._seek_handler = handler
 
+    def transact_with_boundaries[ResultT](
+        self,
+        operation: Callable[[StateEditor, SimulationClock], Mutation[ResultT]],
+        registrations: Callable[[ResultT], tuple[BoundaryRegistration, ...]],
+    ) -> ResultT:
+        """Commit state and install its future boundaries without a clock race."""
+        with self._lock:
+            result = self._coordinator.transact(operation)
+            for registration in registrations(result):
+                self.register_boundary(
+                    registration.at,
+                    registration.priority,
+                    registration.handler,
+                    key=registration.key,
+                )
+            return result
+
     def resume(self) -> SimulationClock:
         with self._lock:
             clock = self.clock

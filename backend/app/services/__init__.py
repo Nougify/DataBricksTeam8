@@ -16,6 +16,12 @@ from app.services.coordinator import (
     MutationCoordinator,
 )
 from app.services.events import EventSink, InMemoryEventSink
+from app.services.movement import (
+    MovementConflictError,
+    MovementLifecycleService,
+    MovementUpdate,
+    project_bus,
+)
 from app.services.proposals import (
     ProposalConflictError,
     ProposalNotFoundError,
@@ -35,10 +41,14 @@ __all__ = [
     "MonotonicTimeSource",
     "Mutation",
     "MutationCoordinator",
+    "MovementConflictError",
+    "MovementLifecycleService",
+    "MovementUpdate",
     "ProposalConflictError",
     "ProposalNotFoundError",
     "ProposalService",
     "SimulationClockController",
     "SystemMonotonicTimeSource",
     "initial_clock",
+    "project_bus",
 ]

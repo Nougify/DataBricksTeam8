@@ -5,7 +5,13 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TypeVar
 
-from app.domain.models import AdditionalTrip, AdditionalTripStatus, Bus, DispatchEvent
+from app.domain.models import (
+    AdditionalTrip,
+    AdditionalTripStatus,
+    Bus,
+    BusStatus,
+    DispatchEvent,
+)
 from app.domain.types import AdditionalTripId, BusId, DispatchEventId
 
 IdT = TypeVar("IdT")
@@ -155,6 +161,24 @@ def validate_entities(state: SimulationEntities) -> None:
             and bus.assigned_trip_id != trip.id
         ):
             raise ValueError(f"active trip {trip.id} lacks its bus assignment")
+        expected_bus_statuses = {
+            AdditionalTripStatus.PROPOSED: {BusStatus.RESERVED},
+            AdditionalTripStatus.APPROVED: {BusStatus.RESERVED},
+            AdditionalTripStatus.BUS_EN_ROUTE: {
+                BusStatus.DEADHEADING,
+                BusStatus.WAITING,
+            },
+            AdditionalTripStatus.IN_SERVICE: {BusStatus.IN_SERVICE},
+        }
+        allowed = expected_bus_statuses.get(trip.status)
+        if allowed is not None and bus.status not in allowed:
+            raise ValueError(f"trip {trip.id} conflicts with bus status {bus.status}")
+        if (
+            trip.status is AdditionalTripStatus.COMPLETED
+            and bus.assigned_trip_id == trip.id
+            and bus.status is not BusStatus.RETURNING
+        ):
+            raise ValueError(f"completed trip {trip.id} has a non-returning bus")
         if trip.status in {
             AdditionalTripStatus.REJECTED,
             AdditionalTripStatus.EXPIRED,
@@ -174,6 +198,17 @@ def validate_entities(state: SimulationEntities) -> None:
 
     for bus in state.buses.list():
         linked_id = bus.proposed_trip_id or bus.assigned_trip_id
+        if (
+            bus.status
+            in {
+                BusStatus.DEADHEADING,
+                BusStatus.WAITING,
+                BusStatus.IN_SERVICE,
+                BusStatus.RETURNING,
+            }
+            and bus.assigned_trip_id is None
+        ):
+            raise ValueError(f"moving bus {bus.id} has no assigned trip")
         if linked_id is None:
             continue
         linked_trip = state.trips.get(AdditionalTripId(linked_id))

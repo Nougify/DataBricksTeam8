@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app.api.serializers import serialize_bus
 from app.config import DataMode, Settings, get_settings
 from app.data.adapters import build_event_source
 from app.data.store import EventWindowStore
@@ -32,6 +33,7 @@ from app.services.clock import (
 )
 from app.services.coordinator import MutationCoordinator
 from app.services.events import InMemoryEventSink
+from app.services.movement import MovementLifecycleService
 from app.services.proposals import (
     ProposalConflictError,
     ProposalNotFoundError,
@@ -131,7 +133,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             routing,
             resolved_settings.proactive_lateness_tolerance_seconds,
         )
-        proposals = ProposalService(coordinator, itinerary, resolved_settings)
+        movement = MovementLifecycleService(coordinator)
+        proposals = ProposalService(
+            coordinator, itinerary, resolved_settings, clock, movement
+        )
         activation = EventActivationService(
             data.reader(), coordinator, clock, proposals
         )
@@ -146,6 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             coordinator=coordinator,
             clock=clock,
             activation=activation,
+            movement=movement,
             proposals=proposals,
             events=events,
         )
@@ -219,7 +225,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 event.model_dump(mode="json") for event in visible_events
             ],
             "buses": [
-                bus.model_dump(mode="json") for bus in snapshot.entities.buses.list()
+                serialize_bus(
+                    bus,
+                    snapshot.entities.trips.get(bus.assigned_trip_id)
+                    if bus.assigned_trip_id is not None
+                    else None,
+                    snapshot.clock.current_time,
+                ).model_dump(mode="json")
+                for bus in snapshot.entities.buses.list()
             ],
             "additional_trips": [
                 trip.model_dump(mode="json") for trip in snapshot.entities.trips.list()
@@ -269,18 +282,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.get("/api/v1/buses")
     async def buses() -> list[dict[str, object]]:
         runtime: RuntimeOwner = application.state.runtime
+        snapshot = runtime.coordinator.snapshot()
         return [
-            bus.model_dump(mode="json")
-            for bus in runtime.coordinator.snapshot().entities.buses.list()
+            serialize_bus(
+                bus,
+                snapshot.entities.trips.get(bus.assigned_trip_id)
+                if bus.assigned_trip_id is not None
+                else None,
+                snapshot.clock.current_time,
+            ).model_dump(mode="json")
+            for bus in snapshot.entities.buses.list()
         ]
 
     @application.get("/api/v1/buses/{bus_id}")
     async def bus(bus_id: str) -> dict[str, object]:
         runtime: RuntimeOwner = application.state.runtime
-        item = runtime.coordinator.snapshot().entities.buses.get(BusId(bus_id))
+        snapshot = runtime.coordinator.snapshot()
+        item = snapshot.entities.buses.get(BusId(bus_id))
         if item is None:
             raise HTTPException(status_code=404, detail="bus not found")
-        return cast(dict[str, object], item.model_dump(mode="json"))
+        trip = (
+            snapshot.entities.trips.get(item.assigned_trip_id)
+            if item.assigned_trip_id is not None
+            else None
+        )
+        return cast(
+            dict[str, object],
+            serialize_bus(item, trip, snapshot.clock.current_time).model_dump(
+                mode="json"
+            ),
+        )
 
     @application.get("/api/v1/additional-trips")
     async def additional_trips() -> list[dict[str, object]]:
@@ -376,6 +407,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.post("/api/v1/additional-trips/{trip_id}/approve")
     async def approve_additional_trip(trip_id: str) -> dict[str, object]:
         runtime: RuntimeOwner = application.state.runtime
+        runtime.clock.pump()
         try:
             result = runtime.proposals.approve(AdditionalTripId(trip_id))
         except ProposalNotFoundError as exc:
@@ -391,6 +423,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.post("/api/v1/additional-trips/{trip_id}/reject")
     async def reject_additional_trip(trip_id: str) -> dict[str, object]:
         runtime: RuntimeOwner = application.state.runtime
+        runtime.clock.pump()
         try:
             result = runtime.proposals.reject(AdditionalTripId(trip_id))
         except ProposalNotFoundError as exc:

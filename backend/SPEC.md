@@ -433,8 +433,17 @@ releases the bus, and reports the typed planning reason as a conflict.
 ### 6.4 Movement
 
 Approved buses progress through deadheading, optional waiting, in-service travel,
-and return. Locations are interpolated from backend-owned paths using simulation
-time. Completing or cancelling a trip releases the bus exactly once.
+and return. Exact lifecycle endpoints are committed at semantic clock boundaries;
+between boundaries, API reads interpolate distance-weighted location and heading
+from backend-owned paths using simulation time. Service completion marks the trip
+complete while its bus remains assigned through the return leg. Return releases
+the bus at home exactly once. Cancellation releases it immediately at its
+interpolated current location, and stale future boundaries become no-ops.
+
+Same-time milestones, including zero-duration legs, are consumed in canonical
+order in one coordinator transaction. Only the next strictly future milestone is
+registered, so accelerated clocks process every crossed phase without exposing
+partial state.
 
 Added capacity is the sum of capacities of backend buses assigned to the event.
 The backend does not reinterpret predicted people as observed riders and does not

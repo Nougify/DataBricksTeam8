@@ -15,7 +15,8 @@ from app.services.clock import (
     SimulationClockController,
 )
 from app.services.coordinator import Mutation, MutationCoordinator
-from app.services.proposals import ProposalService
+from app.services.movement import MOVEMENT_BOUNDARY_NAMESPACE
+from app.services.proposals import PROPOSAL_BOUNDARY_NAMESPACE, ProposalService
 
 EVENT_BOUNDARY_NAMESPACE = "dispatch-event"
 
@@ -44,6 +45,8 @@ class EventActivationService:
     def rebuild_at(self, at: VancouverDateTime) -> SimulationClock:
         self._coordinator.reset(at)
         self._clock.clear_boundaries(EVENT_BOUNDARY_NAMESPACE)
+        self._clock.clear_boundaries(PROPOSAL_BOUNDARY_NAMESPACE)
+        self._clock.clear_boundaries(MOVEMENT_BOUNDARY_NAMESPACE)
         self._activate_through(at)
         self._schedule_after(at)
         return self._clock.clock

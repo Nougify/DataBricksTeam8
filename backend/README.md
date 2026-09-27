@@ -72,6 +72,13 @@ rounded source suggestion, `MAX_BUSES_PER_EVENT`, and available fleet. In
 approval replans at the current simulation time and cancels safely if the route is
 no longer feasible.
 
+Approved trips advance through deadheading, proactive waiting when needed,
+in-service travel, completion, and return using semantic simulation-clock
+boundaries. Bus API reads interpolate location and heading along the persisted
+deadhead, GTFS service, and return paths. Completed trips retain their bus through
+the return leg; the bus becomes available at home, while cancellation releases it
+at its current projected location.
+
 ## Checks
 
 ```sh

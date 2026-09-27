@@ -33,8 +33,11 @@ from app.services.clock import (
     BoundaryPriority,
     BoundaryRegistration,
     BoundaryResult,
+    SimulationClockController,
 )
 from app.services.coordinator import Mutation, MutationCoordinator
+from app.services.movement import MovementLifecycleService
+from app.services.trip_status import aggregate_dispatch_event
 
 PROPOSAL_BOUNDARY_NAMESPACE = "proposal"
 
@@ -58,6 +61,7 @@ class ProposalCreation:
 class ProposalDecision:
     trip: AdditionalTrip
     conflict_reason: str | None = None
+    registrations: tuple[BoundaryRegistration, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -74,10 +78,14 @@ class ProposalService:
         coordinator: MutationCoordinator,
         itinerary: ItineraryComposer,
         settings: Settings,
+        clock: SimulationClockController,
+        movement: MovementLifecycleService,
     ) -> None:
         self._coordinator = coordinator
         self._itinerary = itinerary
         self._settings = settings
+        self._clock = clock
+        self._movement = movement
 
     def create_for_event(
         self,
@@ -202,6 +210,11 @@ class ProposalService:
         )
         editor.put_dispatch_event(updated_event)
         pending.append(self._event_update(updated_event, clock))
+        if not manual:
+            for trip in trips:
+                movement = self._movement.start_approved(editor, clock, trip)
+                pending.extend(movement.events)
+                registrations.extend(movement.registrations)
         return ProposalCreation(
             tuple(pending),
             tuple(registrations),
@@ -209,8 +222,9 @@ class ProposalService:
         )
 
     def approve(self, trip_id: AdditionalTripId) -> ProposalDecision:
-        return self._coordinator.transact(
-            lambda editor, clock: self._approve(editor, clock, trip_id)
+        return self._clock.transact_with_boundaries(
+            lambda editor, clock: self._approve(editor, clock, trip_id),
+            lambda decision: decision.registrations,
         )
 
     def reject(self, trip_id: AdditionalTripId) -> ProposalDecision:
@@ -227,7 +241,12 @@ class ProposalService:
         trip = editor.trip(trip_id)
         if trip is None:
             raise ProposalNotFoundError(str(trip_id))
-        if trip.status is AdditionalTripStatus.APPROVED:
+        if trip.status in {
+            AdditionalTripStatus.APPROVED,
+            AdditionalTripStatus.BUS_EN_ROUTE,
+            AdditionalTripStatus.IN_SERVICE,
+            AdditionalTripStatus.COMPLETED,
+        }:
             return Mutation(ProposalDecision(trip))
         if trip.status is not AdditionalTripStatus.PROPOSED:
             raise ProposalConflictError("trip is not proposed")
@@ -248,6 +267,14 @@ class ProposalService:
             )
             return Mutation(
                 ProposalDecision(cancelled, planned.reason),
+                events,
+            )
+        if planned.estimated_return_time > clock.max_time:
+            cancelled, events = self._finish_proposal(
+                editor, clock, trip, AdditionalTripStatus.CANCELLED
+            )
+            return Mutation(
+                ProposalDecision(cancelled, "movement plan exceeds simulation bounds"),
                 events,
             )
         approved = trip.model_copy(
@@ -271,13 +298,15 @@ class ProposalService:
         editor.put_bus(updated_bus)
         updated_event = self._aggregate_event(editor, event)
         editor.put_dispatch_event(updated_event)
+        movement = self._movement.start_approved(editor, clock, approved)
         return Mutation(
-            ProposalDecision(approved),
+            ProposalDecision(movement.trip, registrations=movement.registrations),
             (
                 self._proposal_update(approved, clock),
                 self._bus_update(updated_bus, clock),
                 self._event_update(updated_event, clock),
-            ),
+            )
+            + movement.events,
         )
 
     def _reject(
@@ -347,28 +376,7 @@ class ProposalService:
     def _aggregate_event(
         self, editor: StateEditor, event: DispatchEvent
     ) -> DispatchEvent:
-        trips = tuple(
-            trip
-            for trip_id in event.additional_trip_ids
-            if (trip := editor.trip(AdditionalTripId(trip_id))) is not None
-        )
-        statuses = {trip.status for trip in trips}
-        if statuses & {
-            AdditionalTripStatus.APPROVED,
-            AdditionalTripStatus.BUS_EN_ROUTE,
-            AdditionalTripStatus.IN_SERVICE,
-            AdditionalTripStatus.COMPLETED,
-        }:
-            status = EventStatus.DISPATCHED
-        elif AdditionalTripStatus.PROPOSED in statuses:
-            status = EventStatus.AWAITING_APPROVAL
-        elif AdditionalTripStatus.REJECTED in statuses:
-            status = EventStatus.REJECTED
-        elif AdditionalTripStatus.EXPIRED in statuses:
-            status = EventStatus.EXPIRED
-        else:
-            status = EventStatus.NO_BUS_AVAILABLE
-        return event.model_copy(update={"status": status})
+        return aggregate_dispatch_event(editor, event)
 
     def _rank_choices(
         self,
@@ -384,6 +392,8 @@ class ProposalService:
                     event, candidate, bus, clock.current_time
                 )
                 if isinstance(plan, MovementPlanFailure):
+                    continue
+                if plan.estimated_return_time > clock.max_time:
                     continue
                 choices.append(_Choice(recommendation, candidate, bus, plan))
         choices.sort(

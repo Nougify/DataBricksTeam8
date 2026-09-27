@@ -20,6 +20,7 @@ from app.services import (
     EventActivationService,
     FakeMonotonicTimeSource,
     InMemoryEventSink,
+    MovementLifecycleService,
     Mutation,
     MutationCoordinator,
     ProposalService,
@@ -41,6 +42,7 @@ class ProposalRuntime:
     clock: SimulationClockController
     time_source: FakeMonotonicTimeSource
     sink: InMemoryEventSink
+    movement: MovementLifecycleService
     proposals: ProposalService
 
 
@@ -65,10 +67,18 @@ def make_runtime(settings: Settings | None = None) -> ProposalRuntime:
         StraightLineRoutingService(settings.routing_speed_kph),
         settings.proactive_lateness_tolerance_seconds,
     )
-    proposals = ProposalService(coordinator, itinerary, settings)
+    movement = MovementLifecycleService(coordinator)
+    proposals = ProposalService(coordinator, itinerary, settings, clock, movement)
     EventActivationService(EventReader(resolved), coordinator, clock, proposals).start()
     return ProposalRuntime(
-        settings, transit, coordinator, clock, time_source, sink, proposals
+        settings,
+        transit,
+        coordinator,
+        clock,
+        time_source,
+        sink,
+        movement,
+        proposals,
     )
 
 
@@ -177,12 +187,12 @@ def test_automatic_mode_approves_immediately_without_auto_pause() -> None:
     assert event is not None
     assert event.status is EventStatus.DISPATCHED
     assert {trip.status for trip in snapshot.entities.trips.list()} == {
-        AdditionalTripStatus.APPROVED
+        AdditionalTripStatus.BUS_EN_ROUTE
     }
     assert all(
         bus.assigned_trip_id is not None
         for bus in snapshot.entities.buses.list()
-        if bus.status is BusStatus.RESERVED
+        if bus.status is BusStatus.WAITING
     )
     assert runtime.clock.clock.status.value == "RUNNING"
 
@@ -197,7 +207,7 @@ def test_manual_approval_and_rejection_update_event_and_release_once() -> None:
     repeated = runtime.proposals.reject(trips[1].id).trip
     snapshot = runtime.coordinator.snapshot()
 
-    assert approved.status is AdditionalTripStatus.APPROVED
+    assert approved.status is AdditionalTripStatus.BUS_EN_ROUTE
     assert rejected.status is AdditionalTripStatus.REJECTED
     assert repeated == rejected
     event = snapshot.entities.dispatch_events.get(DispatchEventId("valid-event"))
