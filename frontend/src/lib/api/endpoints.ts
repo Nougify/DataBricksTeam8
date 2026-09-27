@@ -1,9 +1,9 @@
 // One typed function per endpoint in ../../message.txt. Paths are relative to ENV.apiBaseUrl (/api/v1).
-import { apiGet, apiSend, type RequestOptions } from "./client";
+import { apiGet, apiSend, type QueryParams, type RequestOptions } from "./client";
 import {
   AdditionalTrip,
-  AdditionalTripDetail,
   Backtest,
+  Bus,
   BusList,
   Clock,
   EventList,
@@ -21,23 +21,25 @@ import {
   RouteDetail,
   RouteList,
   RouteLoadList,
+  DispatchEvent,
+  DispatchEventList,
   StateResponse,
   SurgeList,
   Timeline,
   TripList,
   Validation,
   type DayType,
+  type EventStatus,
   type OriginsBasis,
   type SurgePhase,
   type SurgeStatus,
-  type TripStatus,
 } from "./schemas";
 
 const seg = (id: string) => encodeURIComponent(id);
 
 // ---------- simulation state and clock ----------
 
-/** GET /state: the full snapshot, fetched at startup, after `state.reset` and after every reconnect. */
+/** GET /state: the full snapshot, fetched at startup, after `system.reset` and after every reconnect. */
 export const getState = (opts?: RequestOptions) => apiGet("/state", StateResponse, undefined, opts);
 
 /** GET /simulation */
@@ -60,7 +62,21 @@ export const pauseSimulation = () => apiSend("POST", "/clock/pause", undefined, 
 /** POST /clock/resume */
 export const resumeSimulation = () => apiSend("POST", "/clock/resume", undefined, Clock);
 
-// ---------- surges, buses, trips ----------
+// ---------- dispatch events, buses, trips ----------
+
+export interface DispatchEventFilters extends QueryParams {
+  from?: string;
+  to?: string;
+  hub_id?: string;
+  status?: EventStatus;
+  at?: string;
+}
+
+export const getDispatchEvents = (filters?: DispatchEventFilters, opts?: RequestOptions) =>
+  apiGet("/dispatch-events", DispatchEventList, filters, opts);
+
+export const getDispatchEvent = (eventId: string, opts?: RequestOptions) =>
+  apiGet(`/dispatch-events/${seg(eventId)}`, DispatchEvent, undefined, opts);
 
 export const getSurges = (
   filters?: { hub_id?: string; phase?: SurgePhase; status?: SurgeStatus },
@@ -68,28 +84,23 @@ export const getSurges = (
 ) => apiGet("/surges", SurgeList, filters, opts);
 
 export const getBuses = (opts?: RequestOptions) => apiGet("/buses", BusList, undefined, opts);
+export const getBus = (busId: string, opts?: RequestOptions) => apiGet(`/buses/${seg(busId)}`, Bus, undefined, opts);
 
-export const getTrips = (
-  filters?: { status?: TripStatus; hub_id?: string; surge_id?: string },
-  opts?: RequestOptions,
-) => apiGet("/additional-trips", TripList, filters, opts);
+export const getAdditionalTrips = (opts?: RequestOptions) => apiGet("/additional-trips", TripList, undefined, opts);
+export const getTrips = getAdditionalTrips;
 
 /** GET /additional-trips/{id}: every trip field plus bus location, stop progress and the full surge. */
-export const getTripDetail = (tripId: string, opts?: RequestOptions) =>
-  apiGet(`/additional-trips/${seg(tripId)}`, AdditionalTripDetail, undefined, opts);
+export const getAdditionalTrip = (tripId: string, opts?: RequestOptions) =>
+  apiGet(`/additional-trips/${seg(tripId)}`, AdditionalTrip, undefined, opts);
+export const getTripDetail = getAdditionalTrip;
 
 /** POST /additional-trips/{id}/approve. A 409 throws ApiError carrying `trip`. */
-export const approveTrip = (tripId: string, epoch: number) => {
-  void epoch;
-  return apiSend("POST", `/additional-trips/${seg(tripId)}/approve`, undefined, AdditionalTrip);
-};
+export const approveTrip = (tripId: string) =>
+  apiSend("POST", `/additional-trips/${seg(tripId)}/approve`, undefined, AdditionalTrip);
 
 /** POST /additional-trips/{id}/reject. A 409 throws ApiError carrying `trip`. */
-export const rejectTrip = (tripId: string, epoch: number, reason?: string) => {
-  void epoch;
-  void reason;
-  return apiSend("POST", `/additional-trips/${seg(tripId)}/reject`, undefined, AdditionalTrip);
-};
+export const rejectTrip = (tripId: string) =>
+  apiSend("POST", `/additional-trips/${seg(tripId)}/reject`, undefined, AdditionalTrip);
 
 // ---------- routes ----------
 

@@ -1,7 +1,13 @@
 // MockSim state machine (spec §18.1). Most tests use a simple deterministic fake synth so they only exercise
 // the simulator; the last block runs the demo story against the real synthesis.
 import { describe, expect, it, vi } from "vitest";
-import { StateResponse, WsMessage, type AdditionalTrip, type BusStatus, type WsMessageOf } from "@/lib/api/schemas";
+import {
+  LegacyStateResponse as StateResponse,
+  LegacyWsMessage as WsMessage,
+  type LegacyAdditionalTrip as AdditionalTrip,
+  type BusStatus,
+  type LegacyWsMessageOf as WsMessageOf,
+} from "@/lib/api/schemas";
 import { MockSim } from "./mockSim";
 import { getWorld } from "./scenarios";
 import { MockApiError, type SynthApi } from "./types";

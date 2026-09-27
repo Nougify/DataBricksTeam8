@@ -95,6 +95,7 @@ function pickSim(s: LiveState): SimSlice {
     receivedAt: s.receivedAt,
     epoch: s.epoch,
     lastSeq: s.lastSeq,
+    dispatchEvents: s.dispatchEvents,
     surges: s.surges,
     trips: s.trips,
     buses: s.buses,

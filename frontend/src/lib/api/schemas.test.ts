@@ -31,6 +31,7 @@ import surge from "./__fixtures__/surge.json";
 import timeline from "./__fixtures__/timeline.json";
 import validation from "./__fixtures__/validation.json";
 import wsEnvelope from "./__fixtures__/ws-envelope.json";
+import { BUS, CLOCK, EVENT as DISPATCH_EVENT, TRIP } from "@/lib/live/__tests__/fixtures";
 
 function expectExample(schema: z.ZodType, example: unknown) {
   const result = schema.safeParse(example);
@@ -45,16 +46,19 @@ describe("§0.1 shared objects", () => {
     ["HubStatus", S.HubStatus, hubStatus],
     ["Surge", S.Surge, surge],
     ["Bus", S.Bus, bus],
-    ["AdditionalTrip", S.AdditionalTrip, additionalTrip],
+    ["AdditionalTrip", S.AdditionalTrip, TRIP],
   ] as const)("%s", (_name, schema, example) => expectExample(schema, example));
 });
 
 describe("§1–§11b simulation, trips and routes", () => {
-  it("§1 GET /state (composed from §0.1)", () => expectExample(S.StateResponse, composed.state));
+  it("v3 GET /state retains operational entities", () => {
+    const state = { epoch: 3, last_seq: 1042, simulation: CLOCK, dispatch_events: [DISPATCH_EVENT], buses: [BUS], additional_trips: [TRIP] };
+    expectExample(S.StateResponse, state);
+  });
   it("§2 GET /surges", () => expectExample(S.SurgeList, composed.surgeList));
   it("§3 GET /buses", () => expectExample(S.BusList, composed.busList));
-  it("§4 GET /additional-trips", () => expectExample(S.TripList, composed.tripList));
-  it("§5 GET /additional-trips/{id}", () => expectExample(S.AdditionalTripDetail, composed.tripDetail));
+  it("v3 GET /additional-trips", () => expectExample(S.TripList, [TRIP]));
+  it("v3 GET /additional-trips/{id}", () => expectExample(S.AdditionalTripDetail, TRIP));
   it("§6 GET /routes", () => expectExample(S.RouteList, routes));
   it("§7 GET /routes/{id}", () => expectExample(S.RouteDetail, routeDetail));
 
@@ -66,7 +70,6 @@ describe("§1–§11b simulation, trips and routes", () => {
   it("§9 speed body", () => expectExample(S.SpeedBody, speedBody));
   it("§9b approve body", () => expectExample(S.ApproveBody, approveBody));
   it("§9b reject body", () => expectExample(S.RejectBody, rejectBody));
-  it("§9b 409 error body", () => expectExample(S.ErrorBody, composed.error409));
   it("§11b settings body", () => expectExample(S.SettingsBody, settingsBody));
 });
 
@@ -102,25 +105,16 @@ describe("§12 WebSocket", () => {
 
   it("the envelope example parses as an Envelope", () => expectExample(S.Envelope, wsEnvelope));
 
-  // One message per row of the §12 events table, with `data` taken from the §0.1 examples.
+  // One message per backend EventType.
   const events: [string, unknown][] = [
-    ["simulation.tick", { current_time: clock.current_time, local_date: clock.local_date, hour: clock.hour }],
-    ["simulation.state_changed", { ...clock, reason: "AUTO_PAUSE_PROPOSAL" }],
-    ["state.reset", { epoch: 4, reason: "SEEK" }],
     ["clock.updated", { ...clock, reason: null }],
+    ["dispatch_event.updated", DISPATCH_EVENT],
+    ["proposal.created", TRIP],
+    ["proposal.updated", { ...TRIP, status: "APPROVED" }],
+    ["trip.updated", { ...TRIP, status: "BUS_EN_ROUTE" }],
+    ["bus.updated", bus],
     ["system.reset", { epoch: 4, reason: "SEEK" }],
     ["system.error", { message: "Source unavailable" }],
-    ["surge.updated", surge],
-    ["dispatch.proposed", additionalTrip],
-    ["dispatch.approved", { ...additionalTrip, status: "APPROVED" }],
-    ["dispatch.rejected", { ...additionalTrip, status: "REJECTED" }],
-    ["trip.updated", { ...additionalTrip, status: "BUS_EN_ROUTE", progress: { percent_complete: 0.18 } }],
-    ["bus.updated", bus],
-    [
-      "bus.positions_updated",
-      { positions: [{ bus_id: bus.id, location: bus.location, heading_deg: bus.heading_deg, status: "DEADHEADING" }] },
-    ],
-    ["hub.demand_updated", hubStatus],
   ];
 
   it.each(events)("%s parses through WsMessage", (type, data) => expectExample(S.WsMessage, envelope(type, data)));
@@ -129,15 +123,9 @@ describe("§12 WebSocket", () => {
     expect([...S.KNOWN_WS_TYPES].sort()).toEqual(events.map(([type]) => type).sort());
   });
 
-  it("retired events are documentation only, not known types", () => {
-    const retiredTypes = retiredEvents.map((e) => e.type);
-    expect(retiredTypes.sort()).toEqual([
-      "bus.position_updated",
-      "dispatch.created",
-      "surge.detected",
-      "trip.completed",
-      "trip.started",
-    ]);
-    for (const type of retiredTypes) expect(S.KNOWN_WS_TYPES.has(type)).toBe(false);
+  it("rejects retired v2 events", () => {
+    for (const type of ["simulation.tick", "state.reset", "surge.updated", "dispatch.proposed", "bus.positions_updated", "hub.demand_updated"]) {
+      expect(S.KNOWN_WS_TYPES.has(type)).toBe(false);
+    }
   });
 });

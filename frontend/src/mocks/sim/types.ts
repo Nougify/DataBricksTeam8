@@ -1,5 +1,15 @@
 // The seam between the mock simulator (mockSim.ts / instance.ts) and the read handlers + synthesis (synth.ts).
-import type { AdditionalTrip, AdditionalTripDetail, Bus, Clock, DayType, HubStatus, StateResponse, Surge, WsMessage } from "@/lib/api/schemas";
+import type {
+  Bus,
+  Clock,
+  DayType,
+  HubStatus,
+  LegacyAdditionalTrip as AdditionalTrip,
+  LegacyAdditionalTripDetail as AdditionalTripDetail,
+  LegacyStateResponse as StateResponse,
+  LegacyWsMessage as WsMessage,
+  Surge,
+} from "@/lib/api/schemas";
 
 export type MockHubId = "ubc" | "waterfront" | "park-royal";
 

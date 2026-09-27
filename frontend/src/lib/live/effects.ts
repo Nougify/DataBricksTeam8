@@ -3,7 +3,7 @@
 // three toasts are on screen at once (the oldest is dismissed first).
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
-import type { AdditionalTrip, Hub, Surge } from "@/lib/api/schemas";
+import type { AdditionalTrip, Bus, DispatchEvent, Hub, Surge } from "@/lib/api/schemas";
 import { qk } from "@/lib/api/queryKeys";
 import { fmtIndex, fmtTime } from "@/lib/format";
 import type { SimEffect } from "./reducer";
@@ -34,16 +34,26 @@ export function hubDisplayName(hubId: string, queryClient?: QueryClient): string
   return hubs?.find((h) => h.id === hubId)?.name ?? FALLBACK_HUB_NAMES[hubId] ?? hubId;
 }
 
-/** "bus from route 25 → 99 at UBC" (or "bus from depot → R2 at Park Royal"). */
-export function describeProposal(trip: AdditionalTrip, hubName: string | null): string {
-  const from = trip.donor_route ? `bus from route ${trip.donor_route.short_name}` : "bus from depot";
-  return `${from} → ${trip.route.short_name}${hubName ? ` at ${hubName}` : ""}`;
+/** Builds proposal copy from authoritative trip -> bus/event/recommendation joins. */
+export function describeProposal(
+  trip: AdditionalTrip,
+  bus: Bus | undefined,
+  event: DispatchEvent | undefined,
+  locationName?: string | null,
+): string {
+  const from = bus?.source.type === "ROUTE" && bus.source.route
+    ? `bus from route ${bus.source.route.short_name}`
+    : "bus from depot";
+  const recommendation = event?.recommendations.find((item) => item.route_id === trip.route_id);
+  const route = recommendation?.source_route ?? trip.source_route ?? trip.route_id;
+  const where = locationName ?? event?.source_location;
+  return `${from} → ${route}${where ? ` at ${where}` : ""}`;
 }
 
 /** "From depot: North Vancouver Transit Centre" when the bus comes from a depot, else null. */
-export function depotLine(trip: AdditionalTrip, depotName: string | null | undefined): string | null {
-  if (trip.donor_route) return null;
-  return `From depot: ${depotName ?? "unknown depot"}`;
+export function depotLine(bus: Bus | undefined): string | null {
+  if (bus?.source.type === "ROUTE") return null;
+  return `From depot: ${bus?.source.depot_name ?? "unknown depot"}`;
 }
 
 export function surgeToastText(surge: Surge, locationName: string): string {
@@ -85,14 +95,18 @@ function hubName(hubId: string | null, ctx: EffectContext): string | null {
 
 function review(trip: AdditionalTrip) {
   const s = useSim.getState();
-  if (trip.hub_id) s.selectHub(trip.hub_id, "dispatch");
+  const hubId = s.dispatchEvents[trip.dispatch_event_id]?.hub_id;
+  if (hubId) s.selectHub(hubId, "dispatch");
   else s.setTab("dispatch");
   useSim.getState().startPreview(trip.id);
 }
 
 function showProposal(trip: AdditionalTrip, paused: boolean, ctx: EffectContext) {
-  const title = `New proposal: ${describeProposal(trip, hubName(trip.hub_id, ctx))}`;
-  const depot = depotLine(trip, useSim.getState().buses[trip.bus.id]?.source.depot_name);
+  const state = useSim.getState();
+  const bus = state.buses[trip.bus_id];
+  const event = state.dispatchEvents[trip.dispatch_event_id];
+  const title = `New proposal: ${describeProposal(trip, bus, event, hubName(event?.hub_id ?? null, ctx))}`;
+  const depot = depotLine(bus);
   const description = [depot && `${depot}.`, paused ? PAUSED_FOR_REVIEW : null].filter(Boolean).join(" ");
   show(`proposal:${trip.id}`, title, {
     description: description || undefined,
@@ -130,16 +144,16 @@ export function handleSimEffects(effects: readonly SimEffect[], ctx: EffectConte
         }
         break;
       }
-      case "surge-new": {
-        const { surge } = effect;
-        const where = surge.hub_id ? hubDisplayName(surge.hub_id, ctx.queryClient) : surge.location_name;
-        show(`surge:${surge.id}`, surgeToastText(surge, where));
-        break;
-      }
       case "trip-expired": {
         const { trip } = effect;
         dismiss(`proposal:${trip.id}`);
-        const description = describeProposal(trip, hubName(trip.hub_id, ctx));
+        const event = store.dispatchEvents[trip.dispatch_event_id];
+        const description = describeProposal(
+          trip,
+          store.buses[trip.bus_id],
+          event,
+          hubName(event?.hub_id ?? null, ctx),
+        );
         show(`expired:${trip.id}`, "Proposal expired", {
           description: description.charAt(0).toUpperCase() + description.slice(1),
         });

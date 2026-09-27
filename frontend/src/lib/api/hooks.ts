@@ -170,7 +170,7 @@ export function useRouteLoad(hubId: string | null, opts?: TimeOpts) {
   });
 }
 
-/** One hub's status over REST. The store (`hubs`, from /state + hub.demand_updated) usually suffices. */
+/** Retired analytical hub-status endpoint. Operational demand state comes from dispatch events. */
 export function useHubStatus(hubId: string | null, opts?: TimeOpts) {
   const key = useSimHourKey(opts);
   const queryKey = qk.hubStatus(hubId ?? "", key.localDate, key.hour, key.epoch);
@@ -232,7 +232,7 @@ export const useUpdateSettings = () =>
   });
 
 /**
- * Seek. The returned Clock is shown right away and `pendingSeek` holds until the WebSocket's `state.reset`
+ * Seek. The returned Clock is shown right away and `pendingSeek` holds until the WebSocket's `system.reset`
  * brings the new /state (the connection refetches it; don't refetch here). Any preview is closed.
  */
 export const useSeek = () =>
@@ -242,7 +242,7 @@ export const useSeek = () =>
       const s = useSim.getState();
       s.setClockOptimistic(clock);
       s.exitPreview();
-      // No socket means no state.reset is coming; fetch the new state directly.
+      // No socket means no system.reset is coming; fetch the new state directly.
       if (s.connection !== "live") resyncNow();
     },
   });
@@ -255,10 +255,9 @@ export const TRIP_CONFLICT_MESSAGES: Record<string, string> = {
   TRIP_NOT_PROPOSED: "This trip changed state. Showing latest.",
 };
 
-async function tripDecision(run: (epoch: number) => Promise<AdditionalTrip>): Promise<AdditionalTrip> {
-  const store = useSim.getState();
+async function tripDecision(run: () => Promise<AdditionalTrip>): Promise<AdditionalTrip> {
   try {
-    const trip = await run(store.epoch);
+    const trip = await run();
     useSim.getState().upsertTrip(trip);
     return trip;
   } catch (err) {
@@ -273,11 +272,10 @@ async function tripDecision(run: (epoch: number) => Promise<AdditionalTrip>): Pr
 
 export const useApproveTrip = () =>
   useMutation({
-    mutationFn: ({ tripId }: { tripId: string }) => tripDecision((epoch) => api.approveTrip(tripId, epoch)),
+    mutationFn: ({ tripId }: { tripId: string }) => tripDecision(() => api.approveTrip(tripId)),
   });
 
 export const useRejectTrip = () =>
   useMutation({
-    mutationFn: ({ tripId, reason }: { tripId: string; reason?: string }) =>
-      tripDecision((epoch) => api.rejectTrip(tripId, epoch, reason)),
+    mutationFn: ({ tripId }: { tripId: string; reason?: string }) => tripDecision(() => api.rejectTrip(tripId)),
   });

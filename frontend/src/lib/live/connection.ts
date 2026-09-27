@@ -3,7 +3,7 @@
 //   2. fetch /state and apply it (epoch, last_seq);
 //   3. replay buffered messages from that epoch with seq > last_seq;
 //   4. apply live.
-// A `state.reset` (after a seek) re-runs steps 2–3 on the open transport. Reconnects back off
+// A `system.reset` (after a seek) re-runs steps 2–3 on the open transport. Reconnects back off
 // exponentially with jitter, from 0.5 s to 10 s.
 import type { QueryClient } from "@tanstack/react-query";
 import { getState } from "@/lib/api/endpoints";

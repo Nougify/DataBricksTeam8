@@ -1,5 +1,5 @@
-// Zod schemas for every object, response and WebSocket message in ../../message.txt (contract v2).
-// TS types are inferred from these. message.txt wins on names and shapes; don't adapt silently.
+// Runtime schemas for the backend API. Operational state and WebSocket models mirror backend/app.
+// Retired dashboard schemas remain for read-only screens and the legacy mock simulator.
 import { z } from "zod";
 
 // ---------- primitives ----------
@@ -9,7 +9,7 @@ export const IsoTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\
 /** YYYY-MM-DD local date. */
 export const LocalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
 export const Hour = z.number().int().min(0).max(23);
-export const LatLon = z.object({ lat: z.number(), lon: z.number() });
+export const LatLon = z.object({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180) }).strict();
 export type LatLon = z.infer<typeof LatLon>;
 
 export const HubId = z.string(); // "ubc" | "waterfront" | "park-royal" (kept open so new hubs don't break parsing)
@@ -17,8 +17,8 @@ export type HubId = z.infer<typeof HubId>;
 export const DayType = z.enum(["mf", "sat", "sun_hol"]);
 export type DayType = z.infer<typeof DayType>;
 
-export const Position = z.tuple([z.number(), z.number()]);
-export const LineString = z.object({ type: z.literal("LineString"), coordinates: z.array(Position) });
+export const Position = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
+export const LineString = z.object({ type: z.literal("LineString"), coordinates: z.array(Position) }).strict();
 export type LineString = z.infer<typeof LineString>;
 export const MultiLineString = z.object({ type: z.literal("MultiLineString"), coordinates: z.array(z.array(Position)) });
 export const RouteShape = z.union([LineString, MultiLineString]);
@@ -35,7 +35,7 @@ export const RouteRef = z.object({
   mode: Mode,
   color: z.string().nullable(),
   text_color: z.string().nullable(),
-});
+}).strict();
 export type RouteRef = z.infer<typeof RouteRef>;
 
 export const ClockStatus = z.enum(["RUNNING", "PAUSED"]);
@@ -43,14 +43,14 @@ export const Clock = z.object({
   current_time: IsoTime,
   local_date: LocalDate,
   hour: Hour,
-  speed: z.number(),
+  speed: z.union([z.literal(1), z.literal(60), z.literal(300), z.literal(900), z.literal(3600)]),
   status: ClockStatus,
   min_time: IsoTime,
   max_time: IsoTime,
-  approval_mode: z.string(),
+  approval_mode: z.enum(["MANUAL", "AUTOMATIC"]),
   auto_pause_on_proposal: z.boolean(),
-  epoch: z.number().int(),
-});
+  epoch: z.number().int().min(0),
+}).strict();
 export type Clock = z.infer<typeof Clock>;
 
 export const Severity = z.enum(["LOW", "MEDIUM", "HIGH"]);
@@ -132,23 +132,199 @@ export const BusStatus = z.enum(["AVAILABLE", "RESERVED", "DEADHEADING", "WAITIN
 export type BusStatus = z.infer<typeof BusStatus>;
 
 export const Bus = z.object({
-  id: z.string(),
+  id: z.string().trim().min(1),
   status: BusStatus,
   location: LatLon,
-  heading_deg: z.number().nullable(),
-  capacity: z.number(),
+  heading_deg: z.number().min(0).lt(360).nullable(),
+  capacity: z.number().int().positive(),
   source: z.object({
     type: z.enum(["ROUTE", "DEPOT"]),
     route: RouteRef.nullable(),
     depot_name: z.string().nullable(),
-  }),
+  }).strict(),
   assigned_trip_id: z.string().nullable(),
   proposed_trip_id: z.string().nullable(),
+}).strict().superRefine((bus, ctx) => {
+  const routeSource = bus.source.type === "ROUTE" && bus.source.route !== null && bus.source.depot_name === null;
+  const depotSource = bus.source.type === "DEPOT" && bus.source.route === null && bus.source.depot_name !== null;
+  if (!routeSource && !depotSource) ctx.addIssue({ code: "custom", message: "bus source discriminator is inconsistent" });
+  const links = Number(bus.assigned_trip_id !== null) + Number(bus.proposed_trip_id !== null);
+  if (links > 1 || (bus.status === "AVAILABLE" && links > 0) || (bus.status === "RESERVED" && links !== 1)) {
+    ctx.addIssue({ code: "custom", message: "bus trip links conflict with status" });
+  }
 });
 export type Bus = z.infer<typeof Bus>;
 
+// ---------- operational dispatch contract (v3) ----------
+
+const NonEmpty = z.string().trim().min(1);
+const NonNegative = z.number().min(0);
+const NonNegativeInt = z.number().int().min(0);
+const PositiveInt = z.number().int().positive();
+
+export const EventMode = z.enum(["REACTIVE", "PROACTIVE"]);
+export type EventMode = z.infer<typeof EventMode>;
+export const EventStatus = z.enum([
+  "PENDING", "NO_ACTION_REQUIRED", "AWAITING_APPROVAL", "DISPATCHED", "COMPLETED",
+  "NO_MATCHING_ROUTE", "NO_BUS_AVAILABLE", "EXPIRED", "REJECTED", "INVALID_SOURCE",
+]);
+export type EventStatus = z.infer<typeof EventStatus>;
+export const RecommendationMappingStatus = z.enum(["UNRESOLVED", "RESOLVED", "INVALID"]);
+export const RecommendationFailureCode = z.enum([
+  "UNKNOWN_HUB", "UNKNOWN_ROUTE", "AMBIGUOUS_ROUTE", "ROUTE_NOT_SERVING_HUB",
+  "UNKNOWN_DESTINATION", "DESTINATION_NOT_ON_ROUTE", "UNKNOWN_DIRECTION",
+  "INCOMPATIBLE_DIRECTION", "NO_DISPATCH_ELIGIBLE_PATTERN", "NO_SERVICE_ON_DATE",
+]);
+
+export const RecommendationCandidate = z.object({
+  route_id: NonEmpty,
+  pattern_id: NonEmpty,
+  source_stop_id: NonEmpty,
+  destination_stop_id: NonEmpty,
+  source_stop_sequence: NonNegativeInt,
+  destination_stop_sequence: NonNegativeInt,
+  direction_id: z.number().int().nullable(),
+  requested_service_date: LocalDate,
+  feed_service_date: LocalDate,
+  representative_service: z.boolean(),
+  scheduled_trip_ids: z.array(NonEmpty).min(1),
+}).strict().refine((candidate) => candidate.destination_stop_sequence > candidate.source_stop_sequence, {
+  message: "candidate destination must follow source",
+});
+export type RecommendationCandidate = z.infer<typeof RecommendationCandidate>;
+
+export const EventRecommendation = z.object({
+  destination: NonEmpty,
+  destination_share: z.number().min(0).max(100),
+  route_id: NonEmpty.nullable(),
+  source_route: NonEmpty,
+  extra_bus_trips_est: NonNegative,
+  priority_score: NonNegative,
+  scheduled_trips_that_hour: NonNegativeInt.nullable().default(null),
+  extra_people_on_route: NonNegative.nullable().default(null),
+  avg_daily_boardings: NonNegative.nullable().default(null),
+  pct_trips_overcrowded: NonNegative.nullable().default(null),
+  mapping_status: RecommendationMappingStatus.default("UNRESOLVED"),
+  failure_code: RecommendationFailureCode.nullable().default(null),
+  failure_reason: NonEmpty.nullable().default(null),
+  candidates: z.array(RecommendationCandidate).default([]),
+}).strict().superRefine((recommendation, ctx) => {
+  const hasFailure = recommendation.failure_code !== null && recommendation.failure_reason !== null;
+  const hasAnyFailure = recommendation.failure_code !== null || recommendation.failure_reason !== null;
+  if (recommendation.mapping_status === "UNRESOLVED" && (hasAnyFailure || recommendation.candidates.length > 0)) {
+    ctx.addIssue({ code: "custom", message: "unresolved recommendation has mapping output" });
+  }
+  if (recommendation.mapping_status === "RESOLVED" &&
+      (recommendation.route_id === null || recommendation.candidates.length === 0 || hasAnyFailure)) {
+    ctx.addIssue({ code: "custom", message: "resolved recommendation requires route and candidates without a failure" });
+  }
+  if (recommendation.mapping_status === "INVALID" && (!hasFailure || recommendation.candidates.length > 0)) {
+    ctx.addIssue({ code: "custom", message: "invalid recommendation requires one typed failure" });
+  }
+});
+export type EventRecommendation = z.infer<typeof EventRecommendation>;
+
+export const EventSourceMetadata = z.object({
+  split: NonEmpty.nullable().default(null),
+  direction: NonEmpty.nullable().default(null),
+  link: NonEmpty.nullable().default(null),
+  version: NonEmpty.nullable().default(null),
+  generated_at: IsoTime.nullable().default(null),
+}).strict();
+export type EventSourceMetadata = z.infer<typeof EventSourceMetadata>;
+
+export const DispatchEvent = z.object({
+  id: NonEmpty,
+  hub_id: NonEmpty.nullable(),
+  source_location: NonEmpty,
+  location: LatLon.nullable().default(null),
+  available_at: IsoTime.nullable(),
+  actionable_at: IsoTime,
+  event_time: IsoTime,
+  mode: EventMode,
+  surge_type: NonEmpty.nullable(),
+  predicted_people: NonNegative,
+  normal_people: NonNegative,
+  surge_ratio: NonNegative.nullable(),
+  suggested_extra_buses: NonNegativeInt,
+  priority_score: NonNegative,
+  recommendations: z.array(EventRecommendation).min(1),
+  status: EventStatus.default("PENDING"),
+  additional_trip_ids: z.array(NonEmpty).default([]),
+  source: EventSourceMetadata,
+}).strict().superRefine((event, ctx) => {
+  const expectedActionable = event.available_at ?? event.event_time;
+  const expectedMode = event.available_at !== null && Date.parse(event.available_at) < Date.parse(event.event_time)
+    ? "PROACTIVE"
+    : "REACTIVE";
+  if (event.actionable_at !== expectedActionable || event.mode !== expectedMode) {
+    ctx.addIssue({ code: "custom", message: "event availability fields are inconsistent" });
+  }
+  if (new Set(event.additional_trip_ids).size !== event.additional_trip_ids.length) {
+    ctx.addIssue({ code: "custom", message: "trip links must be unique" });
+  }
+  const ordered = [...event.recommendations].sort((a, b) =>
+    b.priority_score - a.priority_score || a.source_route.localeCompare(b.source_route) || a.destination.localeCompare(b.destination));
+  if (ordered.some((recommendation, index) => recommendation !== event.recommendations[index])) {
+    ctx.addIssue({ code: "custom", message: "recommendations must be ordered by priority" });
+  }
+});
+export type DispatchEvent = z.infer<typeof DispatchEvent>;
+
+export const RoutingProvenance = z.object({
+  provider: NonEmpty,
+  is_approximation: z.boolean(),
+  method: NonEmpty,
+  speed_kph: z.number().positive().nullable(),
+}).strict();
+export type RoutingProvenance = z.infer<typeof RoutingProvenance>;
+export const MovementLegKind = z.enum(["DEADHEAD", "SERVICE", "RETURN"]);
+export const MovementLeg = z.object({
+  kind: MovementLegKind,
+  path: LineString.refine((path) => path.coordinates.length >= 2, "movement path requires at least two positions"),
+  distance_m: NonNegative,
+  duration_seconds: NonNegativeInt,
+  provenance: RoutingProvenance,
+}).strict();
+export type MovementLeg = z.infer<typeof MovementLeg>;
+export const MovementPlan = z.object({
+  route_id: NonEmpty,
+  pattern_id: NonEmpty,
+  source_stop_id: NonEmpty,
+  destination_stop_id: NonEmpty,
+  reference_scheduled_trip_id: NonEmpty,
+  mode: EventMode,
+  deadhead: MovementLeg,
+  service: MovementLeg,
+  return_leg: MovementLeg,
+  dispatch_time: IsoTime,
+  estimated_arrival_time: IsoTime,
+  service_departure_time: IsoTime,
+  estimated_completion_time: IsoTime,
+  estimated_return_time: IsoTime,
+  waiting_seconds: NonNegativeInt,
+  arrival_lateness_seconds: NonNegativeInt,
+  total_distance_m: NonNegative,
+}).strict().superRefine((plan, ctx) => {
+  if (plan.deadhead.kind !== "DEADHEAD" || plan.service.kind !== "SERVICE" || plan.return_leg.kind !== "RETURN") {
+    ctx.addIssue({ code: "custom", message: "movement plan legs are out of order" });
+  }
+  const times = [plan.dispatch_time, plan.estimated_arrival_time, plan.service_departure_time,
+    plan.estimated_completion_time, plan.estimated_return_time].map(Date.parse);
+  if (times.some((time, index) => index > 0 && time < times[index - 1])) {
+    ctx.addIssue({ code: "custom", message: "movement plan timestamps must be chronological" });
+  }
+  const distance = plan.deadhead.distance_m + plan.service.distance_m + plan.return_leg.distance_m;
+  if (Math.abs(plan.total_distance_m - distance) > 1e-6) {
+    ctx.addIssue({ code: "custom", message: "movement plan total distance is inconsistent" });
+  }
+});
+export type MovementPlan = z.infer<typeof MovementPlan>;
+
 export const TripStatus = z.enum(["PROPOSED", "APPROVED", "BUS_EN_ROUTE", "IN_SERVICE", "COMPLETED", "REJECTED", "EXPIRED", "CANCELLED"]);
 export type TripStatus = z.infer<typeof TripStatus>;
+export const AdditionalTripStatus = TripStatus;
+export type AdditionalTripStatus = TripStatus;
 
 export const RouteWithLoad = RouteRef.extend({ load_before_pct: z.number(), load_after_pct: z.number() });
 export type RouteWithLoad = z.infer<typeof RouteWithLoad>;
@@ -156,7 +332,7 @@ export type RouteWithLoad = z.infer<typeof RouteWithLoad>;
 export const Evidence = z.object({ label: z.string(), value: z.string(), source: z.string() });
 export type Evidence = z.infer<typeof Evidence>;
 
-export const AdditionalTrip = z.object({
+export const LegacyAdditionalTrip = z.object({
   id: z.string(),
   surge_id: z.string(),
   hub_id: HubId.nullable(),
@@ -181,10 +357,10 @@ export const AdditionalTrip = z.object({
   replaces_trip_id: z.string().nullable(),
   progress: z.object({ percent_complete: z.number() }),
 });
-export type AdditionalTrip = z.infer<typeof AdditionalTrip>;
+export type LegacyAdditionalTrip = z.infer<typeof LegacyAdditionalTrip>;
 
 /** GET /additional-trips/{id}: every AdditionalTrip field plus detail-only fields (§5). */
-export const AdditionalTripDetail = AdditionalTrip.extend({
+export const LegacyAdditionalTripDetail = LegacyAdditionalTrip.extend({
   bus: z.object({ id: z.string(), current_location: LatLon }),
   surge: Surge,
   progress: z.object({
@@ -193,7 +369,41 @@ export const AdditionalTripDetail = AdditionalTrip.extend({
     next_stop_id: z.string().nullable(),
   }),
 });
-export type AdditionalTripDetail = z.infer<typeof AdditionalTripDetail>;
+export type LegacyAdditionalTripDetail = z.infer<typeof LegacyAdditionalTripDetail>;
+
+export const AdditionalTrip = z.object({
+  id: NonEmpty,
+  dispatch_event_id: NonEmpty,
+  bus_id: NonEmpty,
+  route_id: NonEmpty,
+  status: TripStatus,
+  proposed_at: IsoTime,
+  approval_expires_at: IsoTime,
+  dispatch_time: IsoTime.nullable().default(null),
+  target_event_time: IsoTime,
+  estimated_arrival_time: IsoTime.nullable().default(null),
+  service_departure_time: IsoTime.nullable().default(null),
+  estimated_completion_time: IsoTime.nullable().default(null),
+  added_capacity: PositiveInt,
+  rationale: NonEmpty,
+  source_priority: NonNegative,
+  source_route: NonEmpty.nullable().default(null),
+  destination: NonEmpty.nullable().default(null),
+  selected_candidate: RecommendationCandidate.nullable().default(null),
+  movement_plan: MovementPlan.nullable().default(null),
+}).strict().superRefine((trip, ctx) => {
+  if (Date.parse(trip.approval_expires_at) <= Date.parse(trip.proposed_at)) {
+    ctx.addIssue({ code: "custom", message: "approval expiry must follow proposal" });
+  }
+  const times = [trip.dispatch_time, trip.estimated_arrival_time, trip.service_departure_time,
+    trip.estimated_completion_time].filter((time): time is string => time !== null).map(Date.parse);
+  if (times.some((time, index) => index > 0 && time < times[index - 1])) {
+    ctx.addIssue({ code: "custom", message: "trip lifecycle times must be chronological" });
+  }
+});
+export type AdditionalTrip = z.infer<typeof AdditionalTrip>;
+export const AdditionalTripDetail = AdditionalTrip;
+export type AdditionalTripDetail = AdditionalTrip;
 
 // ---------- errors ----------
 
@@ -206,44 +416,31 @@ export type ErrorBody = z.infer<typeof ErrorBody>;
 
 // ---------- responses ----------
 
-const LegacyStateResponse = z.object({
+export const LegacyStateResponse = z.object({
   epoch: z.number().int(),
   last_seq: z.number().int(),
   simulation: Clock,
   hubs: z.array(HubStatus),
   surges: z.array(Surge),
   buses: z.array(Bus),
-  additional_trips: z.array(AdditionalTrip),
+  additional_trips: z.array(LegacyAdditionalTrip),
 });
+export type LegacyStateResponse = z.infer<typeof LegacyStateResponse>;
 
-const BackendStateResponse = z
-  .object({
-    epoch: z.number().int(),
-    last_seq: z.number().int(),
-    simulation: Clock,
-    dispatch_events: z.array(z.unknown()),
-    buses: z.array(Bus),
-    additional_trips: z.array(z.unknown()),
-  })
-  .transform((state) => ({
-    epoch: state.epoch,
-    last_seq: state.last_seq,
-    simulation: state.simulation,
-    // The v3 backend intentionally does not expose the retired hub/surge models.
-    hubs: [],
-    surges: [],
-    buses: state.buses,
-    // Trip rendering still targets the retired enriched trip shape. Do not cast
-    // authoritative v3 trips into fields the backend does not provide.
-    additional_trips: [],
-  }));
-
-export const StateResponse = z.union([LegacyStateResponse, BackendStateResponse]);
+export const StateResponse = z.object({
+  epoch: NonNegativeInt,
+  last_seq: NonNegativeInt,
+  simulation: Clock,
+  dispatch_events: z.array(DispatchEvent),
+  buses: z.array(Bus),
+  additional_trips: z.array(AdditionalTrip),
+}).strict();
 export type StateResponse = z.infer<typeof StateResponse>;
 
 export const SurgeList = z.array(Surge);
 export const BusList = z.array(Bus);
 export const TripList = z.array(AdditionalTrip);
+export const DispatchEventList = z.array(DispatchEvent);
 
 export const RouteListItem = RouteRef.extend({
   serves_hub_ids: z.array(HubId),
@@ -603,31 +800,25 @@ export type BusPosition = z.infer<typeof BusPosition>;
 /** Envelope fields shared by every message. `data` is validated per type below. */
 export const Envelope = z.object({
   type: z.string(),
-  seq: z.number().int(),
-  epoch: z.number().int(),
+  seq: z.number().int().positive(),
+  epoch: NonNegativeInt,
   simulation_time: IsoTime,
   data: z.unknown(),
-});
+}).strict();
 export type Envelope = z.infer<typeof Envelope>;
 
 const env = <T extends string, D extends z.ZodType>(type: T, data: D) =>
-  z.object({ type: z.literal(type), seq: z.number().int(), epoch: z.number().int(), simulation_time: IsoTime, data });
+  z.object({ type: z.literal(type), seq: z.number().int().positive(), epoch: NonNegativeInt, simulation_time: IsoTime, data }).strict();
 
 export const WsMessage = z.discriminatedUnion("type", [
-  env("simulation.tick", z.object({ current_time: IsoTime, local_date: LocalDate, hour: Hour })),
-  env("simulation.state_changed", Clock.extend({ reason: StateChangedReason })),
-  env("state.reset", z.object({ epoch: z.number().int(), reason: z.string() })),
   env("clock.updated", Clock.extend({ reason: StateChangedReason.nullable() })),
-  env("system.reset", z.object({ epoch: z.number().int(), reason: z.literal("SEEK") })),
-  env("system.error", z.object({ message: z.string() })),
-  env("surge.updated", Surge),
-  env("dispatch.proposed", AdditionalTrip),
-  env("dispatch.approved", AdditionalTrip),
-  env("dispatch.rejected", AdditionalTrip),
+  env("dispatch_event.updated", DispatchEvent),
+  env("proposal.created", AdditionalTrip),
+  env("proposal.updated", AdditionalTrip),
   env("trip.updated", AdditionalTrip),
   env("bus.updated", Bus),
-  env("bus.positions_updated", z.object({ positions: z.array(BusPosition) })),
-  env("hub.demand_updated", HubStatus),
+  env("system.reset", z.object({ epoch: NonNegativeInt, reason: z.literal("SEEK") }).strict()),
+  env("system.error", z.object({ message: NonEmpty }).strict()),
 ]);
 export type WsMessage = z.infer<typeof WsMessage>;
 export type WsMessageType = WsMessage["type"];
@@ -635,18 +826,30 @@ export type WsMessageOf<T extends WsMessageType> = Extract<WsMessage, { type: T 
 
 /** Message types we know. Anything else (e.g. retired `surge.detected`) is ignored, not a contract error. */
 export const KNOWN_WS_TYPES: ReadonlySet<string> = new Set<WsMessageType>([
-  "simulation.tick",
-  "simulation.state_changed",
-  "state.reset",
   "clock.updated",
-  "system.reset",
-  "system.error",
-  "surge.updated",
-  "dispatch.proposed",
-  "dispatch.approved",
-  "dispatch.rejected",
+  "dispatch_event.updated",
+  "proposal.created",
+  "proposal.updated",
   "trip.updated",
   "bus.updated",
-  "bus.positions_updated",
-  "hub.demand_updated",
+  "system.reset",
+  "system.error",
 ]);
+
+// Explicit schemas used only by the retired in-browser v2 simulator.
+export const LegacyWsMessage = z.discriminatedUnion("type", [
+  env("simulation.tick", z.object({ current_time: IsoTime, local_date: LocalDate, hour: Hour })),
+  env("simulation.state_changed", Clock.extend({ reason: StateChangedReason })),
+  env("state.reset", z.object({ epoch: z.number().int(), reason: z.string() })),
+  env("surge.updated", Surge),
+  env("dispatch.proposed", LegacyAdditionalTrip),
+  env("dispatch.approved", LegacyAdditionalTrip),
+  env("dispatch.rejected", LegacyAdditionalTrip),
+  env("trip.updated", LegacyAdditionalTrip),
+  env("bus.updated", Bus),
+  env("bus.positions_updated", z.object({ positions: z.array(BusPosition) })),
+  env("hub.demand_updated", HubStatus),
+]);
+export type LegacyWsMessage = z.infer<typeof LegacyWsMessage>;
+export type LegacyWsMessageType = LegacyWsMessage["type"];
+export type LegacyWsMessageOf<T extends LegacyWsMessageType> = Extract<LegacyWsMessage, { type: T }>;

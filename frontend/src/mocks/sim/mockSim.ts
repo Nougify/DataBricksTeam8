@@ -6,8 +6,8 @@
 // "syncs", processing each scheduled event in time order up to that target, so REST and WS always agree.
 // Events only fire in sim time, so nothing expires while paused.
 import type {
-  AdditionalTrip,
-  AdditionalTripDetail,
+  LegacyAdditionalTrip as AdditionalTrip,
+  LegacyAdditionalTripDetail as AdditionalTripDetail,
   Bus,
   BusPosition,
   BusStatus,
@@ -15,12 +15,12 @@ import type {
   HubStatus,
   PredictedDestination,
   StateChangedReason,
-  StateResponse,
+  LegacyStateResponse as StateResponse,
   Surge,
   SurgePhase,
   SurgeStatus,
   TripStatus,
-  WsMessage,
+  LegacyWsMessage as WsMessage,
 } from "@/lib/api/schemas";
 import { HOUR_MS, MINUTE_MS, isoToMs, startOfVancouverHour, toVancouverIso, vancouverParts } from "@/lib/time";
 import { SEED_HUB_IDS } from "@/mocks/data";
@@ -142,7 +142,7 @@ export class MockSim implements MockSimApi {
   private epoch = 1;
   private seq = 0;
   private status: "RUNNING" | "PAUSED" = "PAUSED";
-  private speed = DEFAULT_SPEED;
+  private speed: Clock["speed"] = DEFAULT_SPEED as Clock["speed"];
   private autoPause = true;
   private simMs: number;
   private anchorSim: number;
@@ -221,7 +221,7 @@ export class MockSim implements MockSimApi {
       throw new MockApiError(400, "INVALID_SPEED", `Speed must be one of ${ALLOWED_SPEEDS.join(", ")}.`);
     }
     this.sync();
-    this.speed = speed;
+    this.speed = speed as Clock["speed"];
     this.reanchor();
     this.emitClock("SPEED");
     return this.clock();

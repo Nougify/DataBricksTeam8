@@ -1,6 +1,15 @@
-// Pure reducer for the live simulation state: a /state snapshot plus WebSocket envelopes (message.txt §12).
+// Pure reducer for the v3 live simulation state: a /state snapshot plus sequenced WebSocket events.
 // It also reports effects (toasts, resync) for the connection layer to act on; it never performs them.
-import type { AdditionalTrip, Bus, Clock, HubStatus, StateResponse, Surge, WsMessage } from "@/lib/api/schemas";
+import type {
+  AdditionalTrip,
+  Bus,
+  Clock,
+  DispatchEvent,
+  HubStatus,
+  StateResponse,
+  Surge,
+  WsMessage,
+} from "@/lib/api/schemas";
 
 export interface SimSlice {
   clock: Clock | null;
@@ -8,11 +17,14 @@ export interface SimSlice {
   receivedAt: number;
   epoch: number;
   lastSeq: number;
-  surges: Record<string, Surge>;
+  dispatchEvents: Record<string, DispatchEvent>;
   trips: Record<string, AdditionalTrip>;
   buses: Record<string, Bus>;
+  /** Retired map compatibility only; the v3 live path never populates these. */
+  surges: Record<string, Surge>;
+  /** Retired map compatibility only; the v3 live path never populates these. */
   hubs: Record<string, HubStatus>;
-  /** True between a `state.reset` and the /state snapshot that follows it. */
+  /** True between a `system.reset` and the /state snapshot that follows it. */
   resyncing: boolean;
   /** simulation_time of the last applied message, for "Showing data as of …" notes. */
   lastSimTime: string | null;
@@ -21,7 +33,6 @@ export interface SimSlice {
 export type SimEffect =
   | { kind: "trip-proposed"; trip: AdditionalTrip }
   | { kind: "auto-paused" }
-  | { kind: "surge-new"; surge: Surge }
   | { kind: "trip-expired"; trip: AdditionalTrip }
   | { kind: "reset"; epoch: number };
 
@@ -30,9 +41,10 @@ export const emptySim: SimSlice = {
   receivedAt: 0,
   epoch: 0,
   lastSeq: 0,
-  surges: {},
+  dispatchEvents: {},
   trips: {},
   buses: {},
+  surges: {},
   hubs: {},
   resyncing: false,
   lastSimTime: null,
@@ -52,10 +64,11 @@ export function applySnapshot(s: SimSlice, state: StateResponse, wallNow: number
     receivedAt: wallNow,
     epoch: state.epoch,
     lastSeq: state.last_seq,
-    surges: indexBy(state.surges, (x) => x.id),
+    dispatchEvents: indexBy(state.dispatch_events, (x) => x.id),
     trips: indexBy(state.additional_trips, (x) => x.id),
     buses: indexBy(state.buses, (x) => x.id),
-    hubs: indexBy(state.hubs, (x) => x.hub_id),
+    surges: {},
+    hubs: {},
     resyncing: false,
     lastSimTime: state.simulation.current_time,
   };
@@ -65,12 +78,12 @@ const NO_EFFECTS: SimEffect[] = [];
 
 /**
  * Applies one message. Filtering rules:
- * - `state.reset` applies whenever its `data.epoch` is newer than ours: set resyncing and emit `reset`.
+ * - `system.reset` applies whenever its `data.epoch` is newer than ours: set resyncing and emit `reset`.
  * - Otherwise drop it if its epoch is older than ours, or its seq is at or below lastSeq.
  * - A non-reset message from a newer epoch means we missed the reset; it triggers one too.
  */
 export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { sim: SimSlice; effects: SimEffect[] } {
-  if (msg.type === "state.reset" || msg.type === "system.reset") {
+  if (msg.type === "system.reset") {
     if (msg.data.epoch <= s.epoch) return { sim: s, effects: NO_EFFECTS };
     return {
       sim: { ...s, resyncing: true, lastSimTime: msg.simulation_time },
@@ -89,18 +102,6 @@ export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { si
   const base: SimSlice = { ...s, lastSeq: msg.seq, lastSimTime: msg.simulation_time };
 
   switch (msg.type) {
-    case "simulation.tick": {
-      // No clock yet, or a seek response already moved the clock to a newer epoch: keep what we have.
-      if (!s.clock || msg.epoch < s.clock.epoch) return { sim: base, effects: NO_EFFECTS };
-      const { current_time, local_date, hour } = msg.data;
-      return { sim: { ...base, clock: { ...s.clock, current_time, local_date, hour }, receivedAt: wallNow }, effects: NO_EFFECTS };
-    }
-    case "simulation.state_changed": {
-      const { reason, ...clock } = msg.data;
-      if (s.clock && clock.epoch < s.clock.epoch) return { sim: base, effects: NO_EFFECTS };
-      const effects: SimEffect[] = reason === "AUTO_PAUSE_PROPOSAL" ? [{ kind: "auto-paused" }] : NO_EFFECTS;
-      return { sim: { ...base, clock, receivedAt: wallNow }, effects };
-    }
     case "clock.updated": {
       const { reason, ...clock } = msg.data;
       if (s.clock && clock.epoch < s.clock.epoch) return { sim: base, effects: NO_EFFECTS };
@@ -109,38 +110,23 @@ export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { si
     }
     case "system.error":
       return { sim: base, effects: NO_EFFECTS };
-    case "surge.updated": {
-      const surge = msg.data;
-      const isNew = !(surge.id in s.surges) && surge.phase !== "RESOLVED";
+    case "dispatch_event.updated":
       return {
-        sim: { ...base, surges: { ...s.surges, [surge.id]: surge } },
-        effects: isNew ? [{ kind: "surge-new", surge }] : NO_EFFECTS,
+        sim: { ...base, dispatchEvents: { ...s.dispatchEvents, [msg.data.id]: msg.data } },
+        effects: NO_EFFECTS,
       };
-    }
-    case "dispatch.proposed":
-    case "dispatch.approved":
-    case "dispatch.rejected":
+    case "proposal.created":
+    case "proposal.updated":
     case "trip.updated": {
       const trip = msg.data;
       const prev = s.trips[trip.id];
       const effects: SimEffect[] = [];
-      if (msg.type === "dispatch.proposed" && prev?.status !== "PROPOSED") effects.push({ kind: "trip-proposed", trip });
+      if (msg.type === "proposal.created" && prev?.status !== "PROPOSED") effects.push({ kind: "trip-proposed", trip });
       if (trip.status === "EXPIRED" && prev?.status !== "EXPIRED") effects.push({ kind: "trip-expired", trip });
       return { sim: { ...base, trips: { ...s.trips, [trip.id]: trip } }, effects };
     }
     case "bus.updated":
       return { sim: { ...base, buses: { ...s.buses, [msg.data.id]: msg.data } }, effects: NO_EFFECTS };
-    case "bus.positions_updated": {
-      const buses = { ...s.buses };
-      for (const p of msg.data.positions) {
-        const bus = buses[p.bus_id];
-        // Positions only carry location fields; a bus we've never seen in full waits for bus.updated or /state.
-        if (bus) buses[p.bus_id] = { ...bus, location: p.location, heading_deg: p.heading_deg, status: p.status };
-      }
-      return { sim: { ...base, buses }, effects: NO_EFFECTS };
-    }
-    case "hub.demand_updated":
-      return { sim: { ...base, hubs: { ...s.hubs, [msg.data.hub_id]: msg.data } }, effects: NO_EFFECTS };
   }
 }
 
@@ -164,7 +150,7 @@ export function applyMessages(s: SimSlice, msgs: readonly WsMessage[], wallNow: 
       return {
         sim,
         effects,
-        remaining: msgs.slice(msg.type === "state.reset" || msg.type === "system.reset" ? i + 1 : i),
+        remaining: msgs.slice(msg.type === "system.reset" ? i + 1 : i),
       };
     }
   }
