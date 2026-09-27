@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     app_env: AppEnvironment = AppEnvironment.DEVELOPMENT
     cors_origins: list[AnyHttpUrl] = Field(
         default_factory=lambda: [
+            AnyHttpUrl("https://transitdemo.dhawal.app"),
             AnyHttpUrl("http://localhost:3001"),
             AnyHttpUrl("http://127.0.0.1:3001"),
         ]
