@@ -9,7 +9,7 @@ replace the old v1 plan and are not a record of completed work.
 
 At this revision:
 
-- Chunks 01 through 04 are complete. The Python 3.13/FastAPI service has typed v2 runtime
+- Chunks 01 through 05 are complete. The Python 3.13/FastAPI service has typed v2 runtime
   configuration, shared REST/WebSocket origin policy, application lifespan
   ownership, consistent error envelopes, locked dependencies, and non-root Docker
   startup. `app/main.py` serves `/healthz`.
@@ -22,13 +22,16 @@ At this revision:
 - Deterministic repositories, one application-owned mutation coordinator, atomic
   cross-entity validation and rollback, typed v2 events, and process-local epoch
   and sequence ownership now provide the authoritative simulation mutation core.
-- The v2 simulation clock and APIs, analytics adapters, and WebSocket are still to
-  be implemented. Existing models and the coordinator do not establish v2 completion.
+- The bounded event-driven clock uses monotonic production time and deterministic
+  fake time, processes prioritized semantic boundaries without skipping, and owns
+  clock/entity/event commits atomically through the mutation coordinator.
+- The v2 simulation APIs, analytics adapters, and WebSocket are still to be
+  implemented. Existing models, coordinator, and clock do not establish v2 completion.
 - Existing hub_pulse analysis can supply several read views, but the hourly
   rolling-origin forecast, trailing baseline, and evaluation artifacts are
   explicit data deliverables, not assumed available.
 
-The next implementation step is **05**, while **D1** can proceed in parallel. Do
+The next implementation step is **06**, while **D1** can proceed in parallel. Do
 not postpone forecast validation until after building the dispatcher.
 
 ## 2. Working rules and completion gates

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -13,6 +14,11 @@ from app.data.fixtures import fixture_now
 from app.data.store import SnapshotStore
 from app.errors import install_error_handlers
 from app.runtime import RuntimeOwner
+from app.services.clock import (
+    SimulationClockController,
+    SystemMonotonicTimeSource,
+    initial_clock,
+)
 from app.services.coordinator import MutationCoordinator
 from app.services.events import InMemoryEventSink
 
@@ -35,14 +41,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         data.refresh(now)
         events = InMemoryEventSink()
-        coordinator = MutationCoordinator(events)
+        coordinator = MutationCoordinator(events, initial_clock(resolved_settings))
+        clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
         application.state.runtime = RuntimeOwner(
             settings=resolved_settings,
             data=data,
             coordinator=coordinator,
+            clock=clock,
             events=events,
         )
-        yield
+        clock_task = asyncio.create_task(clock.run())
+        try:
+            yield
+        finally:
+            clock.stop()
+            await clock_task
 
     application = FastAPI(
         title="Surge Bus API",

@@ -6,7 +6,14 @@ from typing import cast
 import pytest
 
 from app.domain.events import EventType, PendingEvent
-from app.domain.models import AdditionalTrip, Bus, BusStatus, Surge
+from app.domain.models import (
+    AdditionalTrip,
+    Bus,
+    BusStatus,
+    ClockStatus,
+    SimulationClock,
+    Surge,
+)
 from app.domain.types import AdditionalTripId, BusId
 from app.repositories import ReadRepository, StateEditor, entities_from
 from app.services import (
@@ -18,6 +25,21 @@ from app.services import (
 from tests.domain.test_models import bus_payload, surge_payload, trip_payload
 
 NOW = datetime(2026, 7, 1, 10, tzinfo=timezone(-timedelta(hours=7)))
+
+
+def make_clock() -> SimulationClock:
+    return SimulationClock(
+        current_time=NOW,
+        local_date=NOW.date(),
+        hour=NOW.hour,
+        speed=1,
+        status=ClockStatus.PAUSED,
+        min_time=NOW - timedelta(days=1),
+        max_time=NOW + timedelta(days=1),
+        approval_mode="MANUAL",
+        auto_pause_on_proposal=True,
+        epoch=0,
+    )
 
 
 def make_bus(*, reserved_for: str | None = None) -> Bus:
@@ -66,7 +88,9 @@ def test_repository_reads_are_deterministic_and_protocol_typed() -> None:
 def test_atomic_proposal_commit_sequences_events_and_snapshot() -> None:
     sink = InMemoryEventSink()
     coordinator = MutationCoordinator(
-        sink, entities_from(buses=(make_bus(),), surges=(make_surge(),))
+        sink,
+        make_clock(),
+        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
     )
 
     def propose(state: StateEditor) -> Mutation[str]:
@@ -94,7 +118,9 @@ def test_atomic_proposal_commit_sequences_events_and_snapshot() -> None:
 def test_failed_transaction_rolls_back_state_events_and_sequence() -> None:
     sink = InMemoryEventSink()
     coordinator = MutationCoordinator(
-        sink, entities_from(buses=(make_bus(),), surges=(make_surge(),))
+        sink,
+        make_clock(),
+        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
     )
 
     def invalid(state: StateEditor) -> Mutation[None]:
@@ -113,7 +139,9 @@ def test_failed_transaction_rolls_back_state_events_and_sequence() -> None:
 def test_cross_entity_failure_emits_nothing() -> None:
     sink = InMemoryEventSink()
     coordinator = MutationCoordinator(
-        sink, entities_from(buses=(make_bus(),), surges=(make_surge(),))
+        sink,
+        make_clock(),
+        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
     )
 
     def broken(state: StateEditor) -> Mutation[None]:
@@ -130,7 +158,9 @@ def test_cross_entity_failure_emits_nothing() -> None:
 def test_concurrent_proposals_cannot_reserve_one_bus_twice() -> None:
     sink = InMemoryEventSink()
     coordinator = MutationCoordinator(
-        sink, entities_from(buses=(make_bus(),), surges=(make_surge(),))
+        sink,
+        make_clock(),
+        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
     )
     start = Barrier(3)
 
@@ -173,7 +203,7 @@ def test_concurrent_proposals_cannot_reserve_one_bus_twice() -> None:
 def test_epoch_is_checked_before_operation_and_sequence_continues_after_swap() -> None:
     sink = InMemoryEventSink()
     initial = entities_from(buses=(make_bus(),), surges=(make_surge(),))
-    coordinator = MutationCoordinator(sink, initial)
+    coordinator = MutationCoordinator(sink, make_clock(), initial)
     called = False
 
     def should_not_run(editor: StateEditor) -> Mutation[None]:
@@ -215,11 +245,20 @@ def test_sink_failure_rolls_back_committed_candidate() -> None:
             raise RuntimeError("sink unavailable")
 
     coordinator = MutationCoordinator(
-        FailingSink(), entities_from(buses=(make_bus(),), surges=(make_surge(),))
+        FailingSink(),
+        make_clock(),
+        entities_from(buses=(make_bus(),), surges=(make_surge(),)),
     )
 
     def update(state: StateEditor) -> Mutation[None]:
         changed = make_bus().model_copy(update={"heading_deg": 90.0})
+        advanced = make_clock().model_copy(
+            update={
+                "current_time": NOW + timedelta(minutes=5),
+                "local_date": NOW.date(),
+                "hour": NOW.hour,
+            }
+        )
         state.put_bus(changed)
         return Mutation(
             None,
@@ -230,6 +269,7 @@ def test_sink_failure_rolls_back_committed_candidate() -> None:
                     data=changed,
                 ),
             ),
+            advanced,
         )
 
     with pytest.raises(RuntimeError, match="sink unavailable"):
@@ -237,6 +277,7 @@ def test_sink_failure_rolls_back_committed_candidate() -> None:
 
     snapshot = coordinator.snapshot()
     assert snapshot.last_seq == 0
+    assert snapshot.clock.current_time == NOW
     bus = snapshot.entities.buses.get(BusId("bus-1"))
     assert bus is not None
     assert bus.heading_deg is None

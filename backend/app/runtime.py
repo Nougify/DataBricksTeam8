@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.data.store import SnapshotStore
+from app.services.clock import SimulationClockController
 from app.services.coordinator import MutationCoordinator
 from app.services.events import EventSink
 
@@ -13,4 +14,5 @@ class RuntimeOwner:
     settings: Settings
     data: SnapshotStore
     coordinator: MutationCoordinator
+    clock: SimulationClockController
     events: EventSink
