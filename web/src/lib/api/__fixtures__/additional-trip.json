@@ -1,0 +1,45 @@
+{
+  "id": "trip-456",
+  "surge_id": "surge-123",
+  "hub_id": "ubc",
+  "bus": { "id": "bus-3" },
+  "route": {
+    "route_id": "6612", "line_key": "99", "short_name": "99", "long_name": "Commercial-Broadway / UBC (B-Line)",
+    "mode": "Bus", "color": "#0060A9", "text_color": "#FFFFFF",
+    "load_before_pct": 104,
+    "load_after_pct": 91
+  },
+  "donor_route": {
+    "route_id": "6620", "line_key": "25", "short_name": "25", "long_name": "Brentwood Station / UBC",
+    "mode": "Bus", "color": null, "text_color": null,
+    "load_before_pct": 48,
+    "load_after_pct": 55
+  },
+  "status": "PROPOSED",
+  "proposed_at": "2025-12-06T10:00:00-08:00",
+  "approval_expires_at": "2025-12-06T10:45:00-08:00",
+  "dispatch_time": "2025-12-06T12:20:00-08:00",
+  "arrival_at_surge_time": "2025-12-06T12:40:00-08:00",
+  "arrives_before_surge": true,
+  "departure_time": "2025-12-06T12:55:00-08:00",
+  "estimated_completion_time": "2025-12-06T13:45:00-08:00",
+  "surge_location": { "lat": 49.2606, "lon": -123.246 },
+  "predicted_destinations": [
+    { "origin": "Surrey", "location": { "lat": 49.1897, "lon": -122.848 }, "share_pct": 14.5, "expected_pings": 680 }
+  ],
+  "deadhead_path": { "type": "LineString", "coordinates": [[-123.1, 49.25], [-123.11, 49.255], [-123.246, 49.2606]] },
+  "service_path": { "type": "LineString", "coordinates": [[-123.246, 49.2606], [-123.15, 49.264], [-123.069, 49.262]] },
+  "impact": {
+    "added_capacity": 77,
+    "deadhead_minutes": 20,
+    "deadhead_km": 11.4
+  },
+  "rationale": "UBC is forecast at 1.79x typical 13:00-15:00; route 25 runs at 48% then, so one bus can move without crowding it.",
+  "evidence": [
+    { "label": "Forecast surge index, UBC 13:00-15:00", "value": "1.79x", "source": "gold_hub_forecast_hourly" },
+    { "label": "Route 99 peak load, midday", "value": "104%", "source": "TransLink TSPR 2025" },
+    { "label": "Route 25 load, midday", "value": "48%", "source": "TransLink TSPR 2025" }
+  ],
+  "replaces_trip_id": null,
+  "progress": { "percent_complete": 0.0 }
+}

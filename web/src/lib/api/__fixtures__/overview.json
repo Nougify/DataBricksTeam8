@@ -1,0 +1,10 @@
+{
+  "hub_id": "ubc",
+  "kpis": [
+    { "key": "pings", "label": "Pings in dataset", "value": 10324110, "unit": "pings", "period": "Nov 2025 - Aug 2026", "comparison": null, "source": "gold_hub_daily" },
+    { "key": "surge_days", "label": "Surge days", "value": 14, "unit": "days", "period": "Nov 2025 - Aug 2026", "comparison": { "label": "Top", "value": "Dec 6, 1.72x" }, "source": "gold_hub_daily" },
+    { "key": "transfer_share", "label": "Regional visitors needing a transfer", "value": 47.6, "unit": "%", "period": "Nov 2025 - Aug 2026", "comparison": null, "source": "gold_origin_access + GTFS" },
+    { "key": "worst_line", "label": "Most overcrowded line", "value": 20.3, "unit": "% trips overcrowded", "period": "2025", "comparison": { "label": "Line", "value": "99 B-Line" }, "source": "TransLink TSPR 2025" },
+    { "key": "peak_load", "label": "Peak load", "value": 104, "unit": "% of capacity", "period": "Fall weekdays 2025", "comparison": { "label": "Where", "value": "99 WEST, 06-09 AM peak" }, "source": "TransLink TSPR 2025" }
+  ]
+}

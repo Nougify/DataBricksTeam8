@@ -1,0 +1,18 @@
+{
+  "day_type": "mf",
+  "hubs": [
+    {
+      "hub_id": "park-royal",
+      "mismatch_pct": 19.4,
+      "pings_in_underserved_hours_pct": 16.0,
+      "underserved_hours": 3,
+      "busiest_line_load_pct": 80,
+      "rebalance": { "moved": 71, "total": 900, "mismatch_after_pct": 0.6 },
+      "add_service": { "added": 45, "window": null, "mismatch_after_pct": 0.6 },
+      "verdict": "RESCHEDULE"
+    }
+  ],
+  "facts": [
+    { "label": "UBC regional visitors with no one-seat ride", "value": "47.6%", "source": "gold_origin_access + GTFS" }
+  ]
+}

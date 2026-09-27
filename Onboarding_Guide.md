@@ -106,3 +106,10 @@ Judges will complete scorecards for each team they evaluate. Scores will be coll
 
 If there is a tie, the judges will review the top-scoring teams and collectively rank them to determine final placement. 
 
+Data Table Column format:
+location_name: Name of the point of interest
+longitude: Longitude of the point of interest
+latitude: Latitude of the point of interest
+timestamp: Time stamp when the device attached to the cell tower
+origin: Origin or home location of the device attached to the cell tower
+dwell_time: Amount of time in minutes the device was attached to the cell tower
