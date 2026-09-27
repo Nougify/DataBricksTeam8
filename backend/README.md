@@ -88,6 +88,14 @@ transitions are not published individually. Seeking backward permanently discard
 manual decisions after the target. Failed source loads, replay conflicts, or
 concurrent state/window changes leave the previous simulation state intact.
 
+## WebSocket events
+
+Connect to `GET /ws` with an `Origin` listed in `CORS_ORIGINS`. The first JSON
+frame is the same atomic snapshot returned by `GET /api/v1/state`; later frames
+are ordered event envelopes carrying `epoch` and `seq`. On reconnect, sequence
+gap, or `system.reset`, treat a fresh state snapshot as authoritative. Slow
+connections are closed instead of silently dropping events.
+
 ## Checks
 
 ```sh

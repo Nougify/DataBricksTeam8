@@ -15,7 +15,13 @@ from app.services.coordinator import (
     Mutation,
     MutationCoordinator,
 )
-from app.services.events import EventSink, InMemoryEventSink
+from app.services.events import (
+    EventSink,
+    EventSubscription,
+    EventSubscriptionClosed,
+    InMemoryEventSink,
+    SubscribableEventSink,
+)
 from app.services.movement import (
     MovementConflictError,
     MovementLifecycleService,
@@ -42,6 +48,8 @@ __all__ = [
     "EpochConflictError",
     "EventActivationService",
     "EventSink",
+    "EventSubscription",
+    "EventSubscriptionClosed",
     "FakeMonotonicTimeSource",
     "InMemoryEventSink",
     "MonotonicTimeSource",
@@ -56,6 +64,7 @@ __all__ = [
     "ReplayConflictError",
     "ReplayDataError",
     "SimulationClockController",
+    "SubscribableEventSink",
     "SystemMonotonicTimeSource",
     "initial_clock",
     "project_bus",

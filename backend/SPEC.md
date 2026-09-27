@@ -538,7 +538,8 @@ optional reads that do not block dispatch.
 
 ## 9. WebSocket Contract
 
-`GET /ws` sends an atomic bootstrap snapshot and then ordered events:
+`GET /ws` first sends the same `StateSnapshot` object returned by `GET /state`,
+then sends ordered event envelopes:
 
 ```text
 clock.updated
@@ -554,7 +555,12 @@ system.error
 Every event carries `epoch`, `seq`, simulation timestamp, type, and payload.
 Clients discard stale epochs, apply only increasing sequence numbers, and refetch
 `/state` after a gap or reset. Activation and proposal creation commit before
-their corresponding messages are emitted.
+their corresponding messages are emitted. The server subscribes before capturing
+the bootstrap and suppresses any buffered envelope already represented by the
+bootstrap's `(epoch, last_seq)`, so a concurrent mutation is neither lost nor sent
+twice. Missing or untrusted WebSocket origins are rejected. A client that cannot
+keep up is disconnected and must reconnect for a fresh snapshot rather than
+continuing across a silently dropped sequence gap.
 
 ## 10. Runtime Configuration And Reliability
 

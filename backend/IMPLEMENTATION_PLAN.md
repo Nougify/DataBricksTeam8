@@ -35,9 +35,9 @@ Completed foundations:
 
 Partial or superseded implementation still present:
 
-- The root frontend remains a health-only page and `/ws` is not implemented.
+- The root frontend remains a health-only page.
 
-The next implementation step is **10 - REST And WebSocket**. Do not build additional
+The next backend implementation step is **11 - Real-data gate**. Do not build additional
 forecast/origin/analytics endpoints against the superseded contract.
 
 ### 1.1 Implementation Status
@@ -53,7 +53,7 @@ forecast/origin/analytics endpoints against the superseded contract.
 | 07 Routing foundations | Complete | Typed deterministic deadhead, GTFS service, return, and lifecycle plans |
 | 08 Movement lifecycle | Complete | Atomic progression, interpolation, completion, cancellation, and return release |
 | 09 Deterministic seek | Complete | Atomic replay, decision cutoff, window replacement, stable state, and reset publication |
-| 10 REST and WebSocket | Partial | Canonical v3 trip schemas, `/ws`, reconnect, gap, and reset handling |
+| 10 REST and WebSocket | Complete | Atomic REST/WebSocket snapshots, ordered events, reconnect, gap, and reset handling |
 | 11 Real-data gate | Not started | Validate selected profile, warehouse, source, mappings, and demo window |
 | 12 Demo acceptance | Not started | Operational frontend, end-to-end automation, Docker smoke tests, and CI |
 
@@ -61,14 +61,12 @@ forecast/origin/analytics endpoints against the superseded contract.
 
 Complete the following in dependency order:
 
-1. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
-   reconnect, gap recovery, reset, and error events.
+1. Select an explicit Databricks profile and validate the live/exported event
+   contract, table/view, warehouse, aliases, source version policy, and demo range.
 2. Replace the root health-only frontend with clock controls, event/proposal
-    decisions, fleet movement, trip lifecycle, source provenance, and reconnect
-    handling. Add the Nginx WebSocket proxy.
-3. Select an explicit Databricks profile and validate the live/exported event
-    contract, table/view, warehouse, aliases, source version policy, and demo range.
-4. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+   decisions, fleet movement, trip lifecycle, source provenance, and reconnect
+   handling. Add the Nginx WebSocket proxy.
+3. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -358,6 +356,12 @@ identical state at the same simulation time.
 ### 10 - REST And WebSocket
 
 **Depends on:** 09.
+
+**Status:** Complete. The REST surface exposes one typed atomic state snapshot,
+and `/ws` sends that same snapshot before ordered committed event envelopes. The
+race-safe subscription handshake, origin policy, bounded slow-client handling,
+reconnect bootstrap, sequence filtering, and epoch reset behavior are covered by
+service and endpoint tests.
 
 - Implement the SPEC v3 core REST surface and atomic `/state` snapshots.
 - Expose only events actionable by the captured `at` time.

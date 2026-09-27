@@ -7,7 +7,7 @@ from app.routing import ItineraryComposer, RoutingService
 from app.services.activation import EventActivationService
 from app.services.clock import SimulationClockController
 from app.services.coordinator import MutationCoordinator
-from app.services.events import EventSink
+from app.services.events import SubscribableEventSink
 from app.services.movement import MovementLifecycleService
 from app.services.proposals import ProposalService
 from app.services.replay import DeterministicSeekService
@@ -30,4 +30,4 @@ class RuntimeOwner:
     movement: MovementLifecycleService
     proposals: ProposalService
     replay: DeterministicSeekService
-    events: EventSink
+    events: SubscribableEventSink

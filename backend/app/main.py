@@ -1,14 +1,15 @@
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from typing import Annotated, Literal, cast
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.api.serializers import serialize_bus
+from app.api.schemas import StateSnapshot
+from app.api.serializers import serialize_bus, serialize_state
 from app.config import DataMode, Settings, get_settings
 from app.data.adapters import build_event_source
 from app.data.store import EventWindowStore
@@ -23,6 +24,7 @@ from app.domain.types import (
 )
 from app.errors import install_error_handlers
 from app.fleet import load_fleet
+from app.origins import is_websocket_origin_allowed
 from app.repositories.memory import entities_from
 from app.routing import ItineraryComposer, build_routing_service
 from app.runtime import RuntimeOwner
@@ -33,7 +35,11 @@ from app.services.clock import (
     initial_clock,
 )
 from app.services.coordinator import EpochConflictError, MutationCoordinator
-from app.services.events import InMemoryEventSink
+from app.services.events import (
+    EventSubscription,
+    EventSubscriptionClosed,
+    InMemoryEventSink,
+)
 from app.services.movement import MovementLifecycleService
 from app.services.proposals import (
     ProposalConflictError,
@@ -227,36 +233,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "approval_mode": runtime.settings.approval_mode,
         }
 
-    @application.get("/api/v1/state")
-    async def state() -> dict[str, object]:
+    @application.get("/api/v1/state", response_model=StateSnapshot)
+    async def state() -> StateSnapshot:
         runtime: RuntimeOwner = application.state.runtime
-        snapshot = runtime.coordinator.snapshot()
-        visible_events = tuple(
-            event
-            for event in snapshot.entities.dispatch_events.list()
-            if event.actionable_at <= snapshot.clock.current_time
-        )
-        return {
-            "epoch": snapshot.epoch,
-            "last_seq": snapshot.last_seq,
-            "simulation": snapshot.clock.model_dump(mode="json"),
-            "dispatch_events": [
-                event.model_dump(mode="json") for event in visible_events
-            ],
-            "buses": [
-                serialize_bus(
-                    bus,
-                    snapshot.entities.trips.get(bus.assigned_trip_id)
-                    if bus.assigned_trip_id is not None
-                    else None,
-                    snapshot.clock.current_time,
-                ).model_dump(mode="json")
-                for bus in snapshot.entities.buses.list()
-            ],
-            "additional_trips": [
-                trip.model_dump(mode="json") for trip in snapshot.entities.trips.list()
-            ],
-        }
+        return serialize_state(runtime.coordinator.snapshot())
+
+    @application.websocket("/ws")
+    async def websocket_events(websocket: WebSocket) -> None:
+        runtime: RuntimeOwner = application.state.runtime
+        if not is_websocket_origin_allowed(
+            websocket.headers.get("origin"), runtime.settings.cors_origin_strings
+        ):
+            await websocket.close(code=1008)
+            return
+
+        await websocket.accept()
+        subscription = runtime.events.subscribe()
+        bootstrap = serialize_state(runtime.coordinator.snapshot())
+        try:
+            await websocket.send_json(bootstrap.model_dump(mode="json"))
+            await _serve_websocket(websocket, subscription, bootstrap)
+        finally:
+            subscription.close()
 
     @application.get(
         "/api/v1/dispatch-events", response_model=list[DispatchEventResponse]
@@ -467,3 +465,47 @@ app = create_app()
 def _event_response(event: object) -> DispatchEventResponse:
     assert isinstance(event, DispatchEvent)
     return DispatchEventResponse.model_validate(event.model_dump(mode="json"))
+
+
+async def _serve_websocket(
+    websocket: WebSocket,
+    subscription: EventSubscription,
+    bootstrap: StateSnapshot,
+) -> None:
+    stream_task = asyncio.create_task(
+        _stream_events(websocket, subscription, bootstrap)
+    )
+    disconnect_task = asyncio.create_task(_wait_for_disconnect(websocket))
+    done, pending = await asyncio.wait(
+        (stream_task, disconnect_task), return_when=asyncio.FIRST_COMPLETED
+    )
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+    for task in done:
+        if task.cancelled():
+            continue
+        with suppress(EventSubscriptionClosed, WebSocketDisconnect):
+            task.result()
+
+
+async def _stream_events(
+    websocket: WebSocket,
+    subscription: EventSubscription,
+    bootstrap: StateSnapshot,
+) -> None:
+    while True:
+        events = await subscription.receive()
+        for event in events:
+            if event.epoch < bootstrap.epoch or (
+                event.epoch == bootstrap.epoch and event.seq <= bootstrap.last_seq
+            ):
+                continue
+            await websocket.send_json(event.model_dump(mode="json"))
+
+
+async def _wait_for_disconnect(websocket: WebSocket) -> None:
+    while True:
+        message = await websocket.receive()
+        if message["type"] == "websocket.disconnect":
+            return
