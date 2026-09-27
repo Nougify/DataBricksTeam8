@@ -29,3 +29,5 @@ def test_lifespan_installs_one_application_runtime() -> None:
 
         assert isinstance(runtime, RuntimeOwner)
         assert application.state.runtime is runtime
+        assert application.state.runtime.coordinator is runtime.coordinator
+        assert application.state.runtime.events is runtime.events

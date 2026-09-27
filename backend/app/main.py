@@ -13,6 +13,8 @@ from app.data.fixtures import fixture_now
 from app.data.store import SnapshotStore
 from app.errors import install_error_handlers
 from app.runtime import RuntimeOwner
+from app.services.coordinator import MutationCoordinator
+from app.services.events import InMemoryEventSink
 
 
 class HealthResponse(BaseModel):
@@ -32,7 +34,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             else datetime.now().astimezone()
         )
         data.refresh(now)
-        application.state.runtime = RuntimeOwner(settings=resolved_settings, data=data)
+        events = InMemoryEventSink()
+        coordinator = MutationCoordinator(events)
+        application.state.runtime = RuntimeOwner(
+            settings=resolved_settings,
+            data=data,
+            coordinator=coordinator,
+            events=events,
+        )
         yield
 
     application = FastAPI(
