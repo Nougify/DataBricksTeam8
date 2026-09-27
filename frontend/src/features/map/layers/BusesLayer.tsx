@@ -2,10 +2,12 @@
 
 // Layer 8: accessible HTML bus markers at the exact live v3 bus locations.
 import { Marker } from "react-map-gl/maplibre";
+import { useSimNow } from "@/lib/live/clock";
 import { useSim } from "@/lib/live/store";
 import { DIM_FACTOR } from "../dim";
 import { BusSwatch, LegendRow } from "../swatches";
 import { busVisual } from "./busPresentation";
+import { projectBusPosition } from "./busProjection";
 import type { MapLayerProps } from "./types";
 
 const BUS_PATH = "M3 4h10.5a2 2 0 0 1 1.5.7L19 10l-4 5.3a2 2 0 0 1-1.5.7H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z";
@@ -16,6 +18,8 @@ function statusLabel(status: string) {
 
 export function BusesLayer({ visible, dimmed, theme }: MapLayerProps) {
   const buses = useSim((s) => s.buses);
+  const trips = useSim((s) => s.trips);
+  const simNow = useSimNow(50);
   const previewTripId = useSim((s) => s.previewTripId);
   const focusTripId = useSim((s) => s.focusTripId);
   const setFocusTrip = useSim((s) => s.setFocusTrip);
@@ -25,18 +29,19 @@ export function BusesLayer({ visible, dimmed, theme }: MapLayerProps) {
 
   return Object.values(buses).map((bus) => {
     const tripId = bus.assigned_trip_id ?? bus.proposed_trip_id;
+    const position = projectBusPosition(bus, bus.assigned_trip_id ? trips[bus.assigned_trip_id] : undefined, simNow);
     const emphasized = tripId !== null && (tripId === previewTripId || tripId === focusTripId);
     const visual = busVisual(bus.status);
     const color = theme.tokens[visual.token];
     const markerOpacity = visual.opacity * (dimmed && tripId !== previewTripId ? DIM_FACTOR : 1);
-    const heading = bus.heading_deg ?? 0;
+    const heading = position.heading_deg ?? 0;
     const label = `Bus ${bus.id}, ${statusLabel(bus.status)}${tripId ? `, linked to trip ${tripId}` : ", unassigned"}`;
 
     return (
       <Marker
         key={bus.id}
-        longitude={bus.location.lon}
-        latitude={bus.location.lat}
+        longitude={position.location.lon}
+        latitude={position.location.lat}
         anchor="center"
         style={{ zIndex: emphasized ? 5 : 4 }}
       >

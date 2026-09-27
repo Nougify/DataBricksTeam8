@@ -99,6 +99,12 @@ def _serialize_vancouver_datetime(value: datetime) -> str:
     return value.astimezone(zone).isoformat()
 
 
+def vancouver_now() -> datetime:
+    utc_value = datetime.now(UTC)
+    zone = PERMANENT_PACIFIC if utc_value >= PERMANENT_PACIFIC_START else VANCOUVER
+    return utc_value.astimezone(zone)
+
+
 VancouverDateTime = Annotated[
     datetime,
     BeforeValidator(_parse_vancouver_datetime),

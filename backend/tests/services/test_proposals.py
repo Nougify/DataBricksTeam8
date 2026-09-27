@@ -129,7 +129,7 @@ def test_activation_creates_capped_proposals_and_reserves_buses_atomically() -> 
     assert trips[0].status is AdditionalTripStatus.PROPOSED
     assert trips[0].selected_candidate is not None
     assert trips[0].movement_plan is not None
-    assert trips[0].destination == "Downtown"
+    assert trips[0].destination == "Commercial-Broadway Station"
     bus = snapshot.entities.buses.get(trips[0].bus_id)
     assert bus is not None and bus.status is BusStatus.RESERVED
     assert runtime.clock.clock.status.value == "PAUSED"

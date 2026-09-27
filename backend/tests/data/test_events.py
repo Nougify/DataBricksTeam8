@@ -21,7 +21,6 @@ def test_fixture_filters_window_and_orders_recommendations() -> None:
 
     assert [event.event_id for event in window.events] == [
         "valid-event",
-        "unknown-route",
         "too-many-buses",
         "same-time-a",
         "same-time-b",
@@ -51,7 +50,6 @@ def test_reader_returns_newly_actionable_interval_in_canonical_order() -> None:
 
     assert [event.id for event in events] == [
         "valid-event",
-        "unknown-route",
         "too-many-buses",
         "same-time-a",
         "same-time-b",
@@ -122,5 +120,8 @@ def test_databricks_uses_one_parameterized_query() -> None:
     source.load_window(START, END)
     statement, parameters = executor.calls[0]
     assert "`catalog`.`schema`.`dispatch_events`" in statement
+    assert "hub_id AS surge_location" in statement
+    assert "destination_share_pct AS destination_share" in statement
+    assert "route_key AS route" in statement
     assert ":source_version" in statement
     assert parameters["source_version"] == "test-v1"

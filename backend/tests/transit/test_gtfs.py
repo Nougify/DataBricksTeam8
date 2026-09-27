@@ -220,7 +220,11 @@ def test_mapper_uses_previous_service_date_for_overflow_trip(tmp_path: Path) -> 
     )
     settings = Settings(
         route_aliases={"99": "099"},
-        destination_aliases={"Downtown": ("ALMA",), "Broadway": ("ALMA",)},
+        destination_aliases={
+            "Downtown": ("ALMA",),
+            "Broadway": ("ALMA",),
+            "Commercial-Broadway Station": ("ALMA",),
+        },
     )
 
     result = RecommendationMapper(index, settings).resolve_event(event)

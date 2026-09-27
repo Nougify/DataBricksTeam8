@@ -28,7 +28,11 @@ UnitWeight = Annotated[float, Field(ge=0, le=1)]
 
 
 def _default_destination_aliases() -> dict[str, tuple[str, ...]]:
-    return {"Downtown": ("ALMA",), "Broadway": ("ALMA",)}
+    return {
+        "Downtown": ("ALMA",),
+        "Broadway": ("ALMA",),
+        "Commercial-Broadway Station": ("ALMA",),
+    }
 
 
 def _default_direction_aliases() -> dict[str, Literal[0, 1]]:

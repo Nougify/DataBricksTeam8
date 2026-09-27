@@ -4,7 +4,7 @@ import json
 import re
 import time
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.error import HTTPError, URLError
@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from app.config import DataMode, Settings
 from app.data.fixtures import build_fixture_rows
 from app.data.models import DispatchEventRow, EventWindow, group_event_rows
+from app.domain.types import PERMANENT_PACIFIC, PERMANENT_PACIFIC_START, VANCOUVER
 
 
 class EventSource(Protocol):
@@ -151,11 +152,17 @@ class DatabricksEventSource:
 
     def load_window(self, start: datetime, end: datetime) -> EventWindow:
         statement = (
-            "SELECT event_id, event_time, available_at, surge_location, "
-            "predicted_people, normal_people, destination, destination_share, "
-            "route, extra_bus_trips_est, priority_score, surge_type, split, "
-            "direction, link, scheduled_trips_that_hour, extra_people_on_route, "
-            "avg_daily_boardings, pct_trips_overcrowded, source_version, generated_at "
+            "SELECT event_id, event_time, available_at, hub_id AS surge_location, "
+            "predicted_people, normal_people, destination, "
+            "destination_share_pct AS destination_share, route_key AS route, "
+            "extra_bus_trips_est, priority_score, CAST(NULL AS STRING) AS surge_type, "
+            "CAST(NULL AS STRING) AS split, CAST(NULL AS STRING) AS direction, "
+            "CAST(NULL AS STRING) AS link, "
+            "CAST(NULL AS INT) AS scheduled_trips_that_hour, "
+            "CAST(NULL AS DOUBLE) AS extra_people_on_route, "
+            "CAST(NULL AS DOUBLE) AS avg_daily_boardings, "
+            "CAST(NULL AS DOUBLE) AS pct_trips_overcrowded, source_version, "
+            "CAST(NULL AS TIMESTAMP) AS generated_at "
             f"FROM `{self._catalog}`.`{self._schema}`.`{self._table}` "
             "WHERE source_version = :source_version "
             "AND event_time >= :window_start AND event_time < :window_end "
@@ -170,7 +177,10 @@ class DatabricksEventSource:
                     "window_end": end.isoformat(),
                 },
             )
-            rows = [DispatchEventRow.model_validate(row) for row in result]
+            rows = [
+                DispatchEventRow.model_validate(_normalize_databricks_timestamps(row))
+                for row in result
+            ]
         except (ValidationError, EventLoadError) as exc:
             raise EventLoadError("Databricks returned invalid dispatch events") from exc
         except Exception as exc:
@@ -258,3 +268,20 @@ def _safe_identifier(value: str) -> str:
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value) is None:
         raise EventLoadError(f"invalid Databricks identifier: {value}")
     return value
+
+
+def _normalize_databricks_timestamps(row: Mapping[str, Any]) -> dict[str, Any]:
+    normalized = dict(row)
+    for field in ("event_time", "available_at", "generated_at"):
+        value = normalized.get(field)
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if isinstance(value, datetime) and value.tzinfo is not None:
+            utc_value = value.astimezone(UTC)
+            zone = (
+                PERMANENT_PACIFIC
+                if utc_value >= PERMANENT_PACIFIC_START
+                else VANCOUVER
+            )
+            normalized[field] = value.astimezone(zone)
+    return normalized
