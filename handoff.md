@@ -77,7 +77,7 @@ All Milestone 1 automated checks pass:
 ## Dependencies & Notes
 - No code changes are required to pass the automated Milestone 1 checks (they already pass).
 - The open issues above are primarily design, usability, and correctness concerns that should be resolved before demo.
-- All changes should be made in the `web/` directory unless otherwise noted (Databricks confirmation may require notebook updates).
+- All frontend changes should be made in the `frontend/` directory unless otherwise noted (Databricks confirmation may require notebook updates).
 
 ## Request for Clarification
 Please answer the questions listed in each issue section to proceed with confident implementation. If any assumptions are acceptable, indicate so; otherwise, we will await your feedback before implementing changes.

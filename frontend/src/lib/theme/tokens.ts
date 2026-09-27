@@ -1,6 +1,6 @@
 // Reads the design tokens (CSS custom properties from src/app/globals.css) as plain colour strings
 // for libraries that can't use CSS variables: ECharts and MapLibre.
-// In JSX, prefer Tailwind classes (bg-surge-high, text-need ...) over these values; see web/DESIGN.md.
+// In JSX, prefer Tailwind classes (bg-surge-high, text-need ...) over these values; see frontend/DESIGN.md.
 //
 // No "use client" here on purpose: TOKEN_NAMES and readTokens() are plain values that server code
 // may import. useThemeTokens() is a hook, so call it from client components only.

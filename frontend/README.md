@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Surge Bus Frontend
 
-## Getting Started
+The frontend is a Next.js 16 application for the surge-dispatch simulation.
 
-First, run the development server:
+## Local development
 
-```bash
+Install dependencies and start the development server:
+
+```sh
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3001`. By default, the app connects to the backend at
+`http://localhost:8000/api/v1` and `ws://localhost:8000/ws`. Override these with
+the `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_WS_URL` values documented in
+`.env.example`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Docker Compose
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+From the repository root, build and start both services:
 
-## Learn More
+```sh
+docker compose up --build
+```
 
-To learn more about Next.js, take a look at the following resources:
+The frontend runs as a standalone Next.js server in the `frontend` container and
+is published at `http://localhost:3001`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Checks
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```

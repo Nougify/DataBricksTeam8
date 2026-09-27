@@ -1,4 +1,4 @@
-// Timing and shape of the scripted surge scenarios (web/DECISIONS.md "Scenarios").
+// Timing and shape of the scripted surge scenarios (frontend/DECISIONS.md "Scenarios").
 // Shared by synth.ts (hourly pings + forecasts) and mockSim.ts (surges, proposals, trips).
 // Hours are Vancouver wall-clock hours on `localDate`; windows are [start, end).
 import type { DriverType } from "@/lib/api/schemas";

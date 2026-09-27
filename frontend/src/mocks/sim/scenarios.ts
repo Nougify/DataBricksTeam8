@@ -1,4 +1,4 @@
-// Scripted surge scenarios and the spare fleet for MockSim (web/DECISIONS.md "Scenarios", "Fleet").
+// Scripted surge scenarios and the spare fleet for MockSim (frontend/DECISIONS.md "Scenarios", "Fleet").
 // Timings and index curves come from scenarioTimeline.ts; routes, stops, loads and origins come from the
 // real Databricks snapshots in mocks/data. Everything here is static and deterministic; per-run state
 // (statuses, expiry, retiming) lives in mockSim.ts.

@@ -1,4 +1,4 @@
-// Deterministic hourly synthesis for mock mode (web/DECISIONS.md "Seed data", spec §12.2).
+// Deterministic hourly synthesis for mock mode (frontend/DECISIONS.md "Seed data", spec §12.2).
 // Every value is keyed by hub | local_date | hour (plus the issue time for forecasts), never by call order.
 //
 // - actualPings: real daily total (gold_hub_daily) × the hub/day-type/hour share of the day (real hourly

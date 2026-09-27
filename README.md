@@ -28,6 +28,5 @@ Start the services with:
 docker compose up --build
 ```
 
-Open `http://localhost:3001` to view the frontend. It verifies the backend through
-`/healthz`; the backend is also available directly at
-`http://localhost:8000/healthz`.
+Open `http://localhost:3001` to view the Next.js frontend. The backend is available
+directly at `http://localhost:8000/healthz`.

@@ -1,4 +1,4 @@
-// Dev-only URL flags for mock mode (web/DECISIONS.md "Dev flags"). Read from window.location.search; ignored in
+// Dev-only URL flags for mock mode (frontend/DECISIONS.md "Dev flags"). Read from window.location.search; ignored in
 // production builds and outside the browser.
 //   ?mock_state=<view>:loading|empty|error   force one view's state (comma-separate several: forecast:error,origins:empty)
 //   ?mock_nonhub=1                           add a non-hub surge (used by MockSim)

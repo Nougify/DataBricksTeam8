@@ -9,7 +9,8 @@ Several agents build this in parallel, so **keep to these file paths and exporte
 - TypeScript strict. No `any` in exported types. `@/*` maps to `src/*`.
 - Everything interactive is a client component (`"use client"`). `app/page.tsx` renders `<Console />`.
 - Don't add npm packages. Everything needed is installed (see `package.json`). If something is truly missing, stop and report it.
-- Don't edit files outside `web/`, except that milestone 5 adds the `web` service to `../docker-compose.yml`.
+- Keep frontend implementation in `frontend/`; root Compose configuration is the
+  only deployment file maintained outside it.
 - Vocabulary (spec §2.1): **pings**, **surge index**, **typical**, **forecast**, **proposal**, **extra trip**, **spare/donor route**, **load**, **one-seat ride / transfer required**. Never say riders or passengers for pings.
 - Every displayed time and date goes through `@/lib/format` (America/Vancouver). Hourly buckets are keyed by the API's `local_date` + `hour` (`hourKey()`), never by epoch math.
 - Colours come from CSS custom properties (see "Theme tokens"), never hard-coded hex in components.
