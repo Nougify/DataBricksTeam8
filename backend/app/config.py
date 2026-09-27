@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -14,6 +14,8 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.domain.models import DayType
 
 AllowedSimulationSpeed = Literal[1, 60, 300, 900, 3600]
 ApprovalMode = Literal["MANUAL"]
@@ -102,11 +104,11 @@ class Settings(BaseSettings):
     routing_speed_kph: PositiveFloat = 30
     return_policy: ReturnPolicy = ReturnPolicy.HOME
     gtfs_source: Path = Path("data/gtfs")
-    gtfs_service_day_mapping: dict[NonEmptyString, NonEmptyString] = Field(
+    gtfs_service_day_mapping: dict[DayType, date] = Field(
         default_factory=lambda: {
-            "mf": "2026-10-14",
-            "sat": "2026-10-17",
-            "sun_hol": "2026-10-18",
+            DayType.MF: date(2026, 10, 14),
+            DayType.SAT: date(2026, 10, 17),
+            DayType.SUN_HOL: date(2026, 10, 18),
         }
     )
 
@@ -140,6 +142,22 @@ class Settings(BaseSettings):
             raise ValueError(
                 "simulation_start_time must be within the simulation bounds"
             )
+
+        required_day_types = {DayType.MF, DayType.SAT, DayType.SUN_HOL}
+        if set(self.gtfs_service_day_mapping) != required_day_types:
+            raise ValueError(
+                "gtfs_service_day_mapping must define mf, sat, and sun_hol"
+            )
+        expected_weekdays = {
+            DayType.MF: set(range(5)),
+            DayType.SAT: {5},
+            DayType.SUN_HOL: {6},
+        }
+        for day_type, service_date in self.gtfs_service_day_mapping.items():
+            if service_date.weekday() not in expected_weekdays[day_type]:
+                raise ValueError(
+                    f"representative date for {day_type.value} has wrong weekday"
+                )
 
         score_weight_total = (
             self.route_score_origin_proximity_weight

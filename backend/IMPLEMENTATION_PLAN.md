@@ -9,7 +9,7 @@ replace the old v1 plan and are not a record of completed work.
 
 At this revision:
 
-- Chunks 01 through 05 are complete. The Python 3.13/FastAPI service has typed v2 runtime
+- Chunks 01 through 06 are complete. The Python 3.13/FastAPI service has typed v2 runtime
   configuration, shared REST/WebSocket origin policy, application lifespan
   ownership, consistent error envelopes, locked dependencies, and non-root Docker
   startup. `app/main.py` serves `/healthz`.
@@ -25,14 +25,17 @@ At this revision:
 - The bounded event-driven clock uses monotonic production time and deterministic
   fake time, processes prioritized semantic boundaries without skipping, and owns
   clock/entity/event commits atomically through the mutation coordinator.
+- Strict GTFS parsing, calendar and exception resolution, representative service
+  dates, stable service patterns, >24-hour schedules, route shapes, and hub
+  catchment indexes now provide one immutable application-owned transit source.
 - The v2 simulation APIs, analytics adapters, and WebSocket are still to be
   implemented. Existing models, coordinator, and clock do not establish v2 completion.
 - Existing hub_pulse analysis can supply several read views, but the hourly
   rolling-origin forecast, trailing baseline, and evaluation artifacts are
   explicit data deliverables, not assumed available.
 
-The next implementation step is **06**, while **D1** can proceed in parallel. Do
-not postpone forecast validation until after building the dispatcher.
+The next implementation step is **07**. Do not postpone forecast validation until
+after building the dispatcher.
 
 ## 2. Working rules and completion gates
 
@@ -70,7 +73,7 @@ not postpone forecast validation until after building the dispatcher.
   If a schema/product decision blocks it, record the blocker rather than
   returning placeholder success responses.
 
-## 3. Dependencies and data workstream
+## 3. Dependencies
 
 Dependencies below are direct prerequisites; their dependencies are transitive.
 Independent workstreams may proceed concurrently once prerequisites are met.
@@ -81,9 +84,6 @@ This does not require parallel agents or concurrent edits to shared notebooks.
 | 01 | Existing scaffold | Runtime/configuration alignment |
 | 02 | 01 | V2 domain and canonical API schemas |
 | 03 | 02 | Versioned data interfaces and explicit fixtures |
-| D1 | 03 | Reproducible actuals, origins, and trailing baselines |
-| D2 | D1 | Hourly rolling-origin forecast vintages |
-| D3 | D2 | Real backtest artifact and forecast validation |
 | 04 | 02 | Repositories, mutation coordinator, event sequencing |
 | 05 | 04 | Bounded event-driven clock |
 | 06 | 02 | GTFS parsing and transit index |
@@ -101,11 +101,10 @@ This does not require parallel agents or concurrent edits to shared notebooks.
 | 18 | 06, 08, 15 | Routes, loads, and map geometry |
 | 19 | 03, 17 | Timeline, profile, and late-night views |
 | 20 | 03, 15 | Remaining findings and proof views |
-| 21 | D3, 16, 17, 18, 19, 20 | Real-data integration and readiness |
+| 21 | 16, 17, 18, 19, 20 | Real-data integration and readiness |
 | 22 | 21 | Reproducible demo, CI, and delivery acceptance |
 
-D1–D3 produce the real artifacts used by 03's interfaces. Backend chunks can use
-explicit fixtures while those artifacts are developed, but Checkpoint C and
+Backend chunks can use explicit fixtures during development, but Checkpoint C and
 chunk 21 require real data. Prepare adapter implementations in 03 and validate
 each real artifact as it arrives; 21 is the integration gate, not the first time
 anyone attempts Databricks ingestion.
@@ -169,59 +168,6 @@ links, timestamp/coordinate errors, load units, and exact serialized fields.
 **Verify:** malformed/duplicate data, no available artifact, as-of cache isolation,
 mode selection, integration failure retaining the prior snapshot, and no fallback.
 **Done when:** backend consumers can use typed data without direct SQL knowledge.
-
-### D1 — Reproducible hourly actuals, origins, and trailing baselines
-
-**Scope:** SPEC sections 3.2, 4.2–4.3. Requires a confirmed Databricks profile
-before workspace execution and an agreed destination for new artifacts.
-
-- Normalize source `Z`-suffixed wall time as Vancouver local time. Record the
-  ambiguity policy for DST repeats/gaps; never manufacture a second observation.
-- Produce versioned hourly actuals and origin slices, preserving dimensions,
-  availability time, source granularity, and all 36 origin categories.
-- Compute same-hub/day-type/hour means over up to eight trailing weeks strictly
-  before issuance. Preserve sample counts and effective lookback period.
-- Document zero/no-sample behavior and partial-hour availability. Keep centered
-  daily indexes isolated in retrospective outputs.
-
-**Verify:** historical DST boundaries, permanent Pacific time after March 8, 2026,
-holiday mapping, future-row perturbations cannot change earlier baselines, zero
-denominators, early warm-up, and source row counts.
-**Done when:** a reproducible pipeline/export provides real as-of demand inputs
-with provenance and usable coverage; adapter contract checks from 03 pass.
-
-### D2 — Hourly historical forecast vintages
-
-**Scope:** SPEC section 4.1. Model choice and training methodology are a team gate.
-
-- Build gold_hub_forecast_hourly with unique hub/issued_at/target_hour keys,
-  elapsed lead_h, point forecast, and 80% interval fields.
-- Generate hourly rolling-origin issuances with all intervening target hours
-  through 24 hours. Train preprocessing/calibration only on pre-issuance data.
-- Preserve model/version, training cutoff, frozen baseline, source version, and
-  normalization provenance. Expose actual coverage rather than assuming Nov 15.
-- Validate forecasts against 03's adapter and choose candidate demo times based
-  on real outputs, not retrospective daily surge labels alone.
-
-**Verify:** future perturbation isolation, exact target/lead alignment, uniqueness,
-interval ordering, missing vintages, and issuance/training cutoffs.
-**Done when:** real historical hourly forecasts load through the backend interface
-and support the advertised replay window/horizons with documented exclusions.
-
-### D3 — Backtest and model-proof artifact
-
-**Scope:** SPEC section 9.15.
-
-- Implement target-deduplicated 3–24-hour surge detection scoring with the frozen
-  three-hour baseline, plus exact 3/6/12/24-hour error and interval coverage.
-- Compute precision, recall, median lead time, MAPE excluding zero actuals, and
-  interval coverage with explicit eligible/excluded counts and null denominators.
-- Version the artifact with input/model IDs, actual usable period, and method.
-  Export it through 03; do not fill the scorecard with draft example numbers.
-
-**Verify:** hand-checkable fixture metrics, duplicate issuances, missing baselines,
-zero actuals, empty denominators, and repeatability on the pinned real snapshot.
-**Done when:** `/backtest` can be backed by an independently reproducible artifact.
 
 ## 5. Authoritative simulation core
 
@@ -510,8 +456,8 @@ profile zero-fill versus absent artifacts, and retrospective labeling/isolation.
   absent. Return computed validation profiles/correlations, not draft constants.
 
 **Verify:** endpoint schemas, deterministic ordering, evidence periods, seek-link
-bounds, event overlap/filtering, and missing-artifact errors. D3's real artifact
-can be wired as soon as available; fixture tests do not certify real metrics.
+bounds, event overlap/filtering, and missing-artifact errors. Fixture tests do not
+certify real metrics.
 **Done when:** remaining panels and proof APIs expose the prescribed contracts.
 
 ## 7. Integration, rollout, and acceptance
@@ -520,8 +466,9 @@ can be wired as soon as available; fixture tests do not certify real metrics.
 
 **Scope:** SPEC sections 4, 11, 13.3.
 
-- Load D1–D3 and existing gold outputs through the adapters; pin the snapshot,
-  GTFS mapping, model version, evaluation period, and configured real demo fleet.
+- Load actuals, origins, baselines, forecast vintages, evaluation outputs, and
+  existing gold outputs through the adapters; pin the snapshot, GTFS mapping,
+  model version, evaluation period, and configured real demo fleet.
 - Validate table/schema mappings, all analytical queries, coverage, and source
   attribution. Distinguish optional missing analytics from simulation blockers.
 - Select actual usable bounds and verified demo presets that produce feasible
@@ -558,13 +505,13 @@ to its source artifact and method.
 |---|---|---|
 | A — V2 foundation | 01–09 using explicit fixtures | Canonical models, coordinator, clock, data/transit interfaces, and as-of demand |
 | B — Manual replay engine | A + 10–14 | Propose/approve/reject/expire/move/return/seek with deterministic state |
-| C — Priority-one frontend demo | B + 15–17 + D1–D2 and verified real inputs/preset | Interactive real hourly forecast, origins, manual dispatch, and reconnect/seek |
-| D — Planning and proof | C + 18–20 + D3 | Maps/loads, timeline, planner, late-night, findings, and real scorecard |
+| C — Priority-one frontend demo | B + 15–17 and verified real inputs/preset | Interactive real hourly forecast, origins, manual dispatch, and reconnect/seek |
+| D — Planning and proof | C + 18–20 | Maps/loads, timeline, planner, late-night, findings, and real scorecard |
 | E — Delivery-ready | D + 21–22 | Full integration, degradation behavior, reproducibility, and CI |
 
 For the fastest useful slice, exercise one hub, one eligible pattern, and a small
-explicit fleet through chunks 01–17 while D1–D3 proceed. Use the same v2 interfaces
-for fixtures and real inputs, then expand coverage to all three hubs. Do not
+explicit fleet through chunks 01–17. Use the same v2 interfaces for fixtures and
+real inputs, then expand coverage to all three hubs. Do not
 mistake a fixture-only Checkpoint B for the real-data Checkpoint C.
 
 If time is short, prioritize SPEC 12.1: finish the priority-one slice first, then
@@ -576,16 +523,16 @@ first. Keep incomplete features visibly unavailable rather than inventing data.
 
 | Decision / input | Needed by | Action |
 |---|---|---|
-| Databricks profile and artifact destinations | D1 execution | Ask team; explicit profile, serverless, shared-workspace coordination |
-| Timestamp ambiguity/source granularity | D1 | Record normalization and partial-hour policy |
-| Model/training and baseline warm-up | D2 | Choose/version method; derive actual replay coverage |
+| Databricks profile and artifact destinations | 21 | Ask team; explicit profile, serverless, shared-workspace coordination |
+| Timestamp ambiguity/source granularity | 09, 17, 21 | Record normalization and partial-hour policy |
+| Model/training and baseline warm-up | 09, 17, 20, 21 | Choose/version method; derive actual replay coverage |
 | Fleet count/capacity/source/locations | 08; real gate 21 | Supply explicit configuration, including donor eligibility |
 | Before/after load model | 08, 11 | Document formula/inputs or expose null estimates with explanation |
 | GTFS representative service-day mapping | 06 | Pin and disclose mapping outside feed validity |
 | Approval timeout/mapping | 12 | Use spec default and RESERVED-until-dispatch behavior; align frontend |
 | Curated event owner/storage | 20 | Assign curator and source-backed CSV/table location |
 | Frontend contract clarifications | 02, 15–17 | Sync mocks: hourly time keys, nullable partials, load >100, hour_complete, stale trip null, bootstrap buffering |
-| Verified preset times | D2, 21 | Demonstrate model-triggered feasible proposals before publishing presets |
+| Verified preset times | 21 | Demonstrate model-triggered feasible proposals before publishing presets |
 | Hosting | 22 | Choose public HTTPS/WSS provider supporting one authoritative process |
 
 Unresolved choices must not silently change SPEC.md. Record the agreed decision

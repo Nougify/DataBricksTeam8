@@ -225,7 +225,7 @@ class Stop(DomainModel):
 
 class ScheduledStopTime(DomainModel):
     stop: Stop
-    sequence: PositiveInt
+    sequence: NonNegativeInt
     arrival_offset_seconds: NonNegativeInt
     departure_offset_seconds: NonNegativeInt
 
@@ -242,7 +242,7 @@ class ServicePattern(DomainModel):
     direction_id: int | None
     headsign: NonEmptyText | None
     stops: tuple[ScheduledStopTime, ...] = Field(min_length=2)
-    shape: RouteShape
+    shape: RouteShape | None
 
     @field_validator("stops")
     @classmethod
@@ -250,14 +250,17 @@ class ServicePattern(DomainModel):
         cls, value: tuple[ScheduledStopTime, ...]
     ) -> tuple[ScheduledStopTime, ...]:
         sequences = [stop.sequence for stop in value]
-        arrivals = [stop.arrival_offset_seconds for stop in value]
-        if sequences != sorted(set(sequences)) or arrivals != sorted(arrivals):
+        if sequences != sorted(set(sequences)) or any(
+            current.departure_offset_seconds > following.arrival_offset_seconds
+            for current, following in zip(value, value[1:], strict=False)
+        ):
             raise ValueError("pattern stops must be uniquely ordered and chronological")
         return value
 
 
 class ScheduledTrip(DomainModel):
     id: NonEmptyScheduledTripId
+    gtfs_trip_id: NonEmptyText
     service_pattern_id: NonEmptyServicePatternId
     service_date: date
     start_time: VancouverDateTime

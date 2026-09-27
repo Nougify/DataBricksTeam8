@@ -258,6 +258,7 @@ def test_schedule_is_ordered_and_immutable() -> None:
         ScheduledTrip.model_validate(
             {
                 "id": "scheduled-1",
+                "gtfs_trip_id": "gtfs-trip-1",
                 "service_pattern_id": "p1",
                 "service_date": "2026-07-01",
                 "start_time": "2026-07-01T10:00:00-07:00",

@@ -5,6 +5,7 @@ from pydantic import AnyHttpUrl, ValidationError
 from pytest import MonkeyPatch
 
 from app.config import AppEnvironment, DataMode, Settings
+from app.domain.models import DayType
 
 
 def test_settings_have_v2_defaults() -> None:
@@ -68,3 +69,17 @@ def test_settings_require_databricks_connection_for_databricks_mode() -> None:
 def test_settings_reject_invalid_route_weight_total() -> None:
     with pytest.raises(ValidationError, match="weights must sum to 1"):
         Settings(route_score_deadhead_time_weight=0.5)
+
+
+def test_settings_validate_representative_service_dates() -> None:
+    with pytest.raises(ValidationError, match="mf, sat, and sun_hol"):
+        Settings(gtfs_service_day_mapping={DayType.MF: "2026-10-14"})
+
+    with pytest.raises(ValidationError, match="wrong weekday"):
+        Settings(
+            gtfs_service_day_mapping={
+                DayType.MF: "2026-10-17",
+                DayType.SAT: "2026-10-14",
+                DayType.SUN_HOL: "2026-10-18",
+            }
+        )

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.config import Settings, get_settings
+from app.config import DataMode, Settings, get_settings
 from app.data.adapters import build_snapshot_source
 from app.data.fixtures import fixture_now
 from app.data.store import SnapshotStore
@@ -21,6 +21,11 @@ from app.services.clock import (
 )
 from app.services.coordinator import MutationCoordinator
 from app.services.events import InMemoryEventSink
+from app.transit import (
+    build_fixture_transit_index,
+    default_hub_catchments,
+    load_gtfs_directory,
+)
 
 
 class HealthResponse(BaseModel):
@@ -40,12 +45,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             else datetime.now().astimezone()
         )
         data.refresh(now)
+        transit = (
+            build_fixture_transit_index(
+                resolved_settings.gtfs_feed_version,
+                resolved_settings.gtfs_service_day_mapping,
+            )
+            if resolved_settings.data_mode is DataMode.FIXTURE
+            else load_gtfs_directory(
+                resolved_settings.gtfs_source,
+                feed_version=resolved_settings.gtfs_feed_version,
+                representative_dates=resolved_settings.gtfs_service_day_mapping,
+                hubs=default_hub_catchments(),
+            )
+        )
         events = InMemoryEventSink()
         coordinator = MutationCoordinator(events, initial_clock(resolved_settings))
         clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
         application.state.runtime = RuntimeOwner(
             settings=resolved_settings,
             data=data,
+            transit=transit,
             coordinator=coordinator,
             clock=clock,
             events=events,
