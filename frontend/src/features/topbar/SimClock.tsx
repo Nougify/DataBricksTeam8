@@ -1,9 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMeta, useTimeline } from "@/lib/api/hooks";
 import type { DayType } from "@/lib/api/schemas";
 import { fmtClock } from "@/lib/format";
 import { useSimNow } from "@/lib/live/clock";
@@ -18,19 +16,12 @@ const FALLBACK_DAY_TYPE_LABELS: Record<DayType, string> = {
 };
 
 /**
- * Day type for a Vancouver date: from /timeline when loaded (it knows the pipeline's holidays), otherwise
- * from the calendar and the BC holiday list. Labels come from /meta.day_types.
+ * Day type for a Vancouver date, derived locally because v3 does not expose the
+ * retired analytical timeline endpoint.
  */
 function useDayTypeLabel(localDate: string | null): string | null {
-  const timeline = useTimeline();
-  const meta = useMeta();
-  const byDate = useMemo(
-    () => new Map((timeline.data?.days ?? []).map((d) => [d.local_date, d.day_type] as const)),
-    [timeline.data],
-  );
   if (!localDate) return null;
-  const id = byDate.get(localDate) ?? dayTypeOf(localDate);
-  return meta.data?.day_types.find((d) => d.id === id)?.label ?? FALLBACK_DAY_TYPE_LABELS[id];
+  return FALLBACK_DAY_TYPE_LABELS[dayTypeOf(localDate)];
 }
 
 /**

@@ -12,13 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useMeta, useUpdateSettings } from "@/lib/api/hooks";
+import { useMeta } from "@/lib/api/hooks";
 import type { Clock, Preset } from "@/lib/api/schemas";
 import { fmtDate, hourLabel } from "@/lib/format";
 import { useSim } from "@/lib/live/store";
 import { toVancouverIso, vancouverParts, vancouverToMs } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { toastFailure, useJumpTo, usePresetJump, useResetDemo } from "./actions";
+import { useJumpTo, usePresetJump, useResetDemo } from "./actions";
 
 // ---------- presets ----------
 
@@ -46,7 +46,7 @@ export function PresetsMenu({ fullWidth = false, className }: { fullWidth?: bool
         <Button
           variant="outline"
           size={fullWidth ? "lg" : "sm"}
-          disabled={!meta.data || isPending}
+          disabled={!meta.data || meta.data.presets.length === 0 || isPending}
           className={cn(fullWidth && "h-11 w-full justify-between", className)}
         >
           {isPending ? "Jumping…" : "Presets"}
@@ -189,11 +189,7 @@ export function DatePickerDialog({ open, onOpenChange }: { open: boolean; onOpen
 /** Current auto-pause setting, showing the requested value while the update is in flight. */
 export function useAutoPause() {
   const setting = useSim((s) => s.clock?.auto_pause_on_proposal ?? null);
-  const update = useUpdateSettings();
-  const checked = update.isPending ? update.variables.auto_pause_on_proposal : setting;
-  const setChecked = (value: boolean) =>
-    update.mutate({ auto_pause_on_proposal: value }, { onError: (e) => toastFailure("change auto-pause", e) });
-  return { checked: checked ?? false, disabled: setting === null || update.isPending, setChecked };
+  return { checked: setting ?? false, disabled: true, setChecked: () => undefined };
 }
 
 export const AUTO_PAUSE_LABEL = "Pause when a bus is proposed";

@@ -7,7 +7,6 @@
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
-import { useHubs } from "@/lib/api/hooks";
 import { hubDisplayName } from "@/lib/live/effects";
 import { useSim } from "@/lib/live/store";
 
@@ -27,9 +26,8 @@ export function NetworkOverviewSlot() {
 }
 
 export function HubPanelSlot({ hubId }: { hubId: string }) {
-  const hubs = useHubs();
   const selectHub = useSim((s) => s.selectHub);
-  const name = hubs.data?.find((h) => h.id === hubId)?.name ?? hubDisplayName(hubId);
+  const name = hubDisplayName(hubId);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4 md:px-4">

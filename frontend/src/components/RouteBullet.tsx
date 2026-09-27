@@ -26,7 +26,7 @@ export function RouteBullet({ route, dense = false, className }: RouteBulletProp
 
   return (
     <span
-      title={route.long_name}
+      title={route.long_name ?? route.short_name}
       className={cn(
         "inline-flex min-w-7 shrink-0 items-center justify-center rounded-sm px-1.5 font-heading text-sm leading-none font-bold whitespace-nowrap",
         dense ? "h-[18px]" : "h-5",

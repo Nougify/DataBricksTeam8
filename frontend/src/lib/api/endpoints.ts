@@ -43,22 +43,22 @@ export const getState = (opts?: RequestOptions) => apiGet("/state", StateRespons
 /** GET /simulation */
 export const getSimulation = (opts?: RequestOptions) => apiGet("/simulation", Clock, undefined, opts);
 
-/** PUT /simulation/time: seek. Returns the Clock with the new epoch; `state.reset` follows on the WebSocket. */
+/** POST /clock/seek: seek. Returns the Clock with the new epoch; `system.reset` follows on the WebSocket. */
 export const seekSimulation = (currentTime: string) =>
-  apiSend("PUT", "/simulation/time", { current_time: currentTime }, Clock);
+  apiSend("POST", "/clock/seek", { time: currentTime }, Clock);
 
-/** PUT /simulation/speed */
-export const setSimulationSpeed = (speed: number) => apiSend("PUT", "/simulation/speed", { speed }, Clock);
+/** POST /clock/speed */
+export const setSimulationSpeed = (speed: number) => apiSend("POST", "/clock/speed", { speed }, Clock);
 
 /** PUT /simulation/settings */
 export const updateSimulationSettings = (settings: { auto_pause_on_proposal: boolean }) =>
   apiSend("PUT", "/simulation/settings", settings, Clock);
 
-/** POST /simulation/pause */
-export const pauseSimulation = () => apiSend("POST", "/simulation/pause", undefined, Clock);
+/** POST /clock/pause */
+export const pauseSimulation = () => apiSend("POST", "/clock/pause", undefined, Clock);
 
-/** POST /simulation/resume */
-export const resumeSimulation = () => apiSend("POST", "/simulation/resume", undefined, Clock);
+/** POST /clock/resume */
+export const resumeSimulation = () => apiSend("POST", "/clock/resume", undefined, Clock);
 
 // ---------- surges, buses, trips ----------
 
@@ -79,17 +79,17 @@ export const getTripDetail = (tripId: string, opts?: RequestOptions) =>
   apiGet(`/additional-trips/${seg(tripId)}`, AdditionalTripDetail, undefined, opts);
 
 /** POST /additional-trips/{id}/approve. A 409 throws ApiError carrying `trip`. */
-export const approveTrip = (tripId: string, epoch: number) =>
-  apiSend("POST", `/additional-trips/${seg(tripId)}/approve`, { epoch }, AdditionalTrip);
+export const approveTrip = (tripId: string, epoch: number) => {
+  void epoch;
+  return apiSend("POST", `/additional-trips/${seg(tripId)}/approve`, undefined, AdditionalTrip);
+};
 
 /** POST /additional-trips/{id}/reject. A 409 throws ApiError carrying `trip`. */
-export const rejectTrip = (tripId: string, epoch: number, reason?: string) =>
-  apiSend(
-    "POST",
-    `/additional-trips/${seg(tripId)}/reject`,
-    reason ? { epoch, reason } : { epoch },
-    AdditionalTrip,
-  );
+export const rejectTrip = (tripId: string, epoch: number, reason?: string) => {
+  void epoch;
+  void reason;
+  return apiSend("POST", `/additional-trips/${seg(tripId)}/reject`, undefined, AdditionalTrip);
+};
 
 // ---------- routes ----------
 
