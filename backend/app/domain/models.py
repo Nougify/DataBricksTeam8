@@ -88,12 +88,14 @@ class EventMode(StrEnum):
 
 class EventStatus(StrEnum):
     PENDING = "PENDING"
+    NO_ACTION_REQUIRED = "NO_ACTION_REQUIRED"
     AWAITING_APPROVAL = "AWAITING_APPROVAL"
     DISPATCHED = "DISPATCHED"
     COMPLETED = "COMPLETED"
     NO_MATCHING_ROUTE = "NO_MATCHING_ROUTE"
     NO_BUS_AVAILABLE = "NO_BUS_AVAILABLE"
     EXPIRED = "EXPIRED"
+    REJECTED = "REJECTED"
     INVALID_SOURCE = "INVALID_SOURCE"
 
 
@@ -280,6 +282,73 @@ class GeoJsonMultiLineString(DomainModel):
 RouteShape = GeoJsonLineString | GeoJsonMultiLineString
 
 
+class RoutingProvenance(DomainModel):
+    provider: NonEmptyText
+    is_approximation: bool
+    method: NonEmptyText
+    speed_kph: Annotated[float, Field(gt=0)] | None
+
+
+class MovementLegKind(StrEnum):
+    DEADHEAD = "DEADHEAD"
+    SERVICE = "SERVICE"
+    RETURN = "RETURN"
+
+
+class MovementLeg(DomainModel):
+    kind: MovementLegKind
+    path: GeoJsonLineString
+    distance_m: NonNegativeFloat
+    duration_seconds: NonNegativeInt
+    provenance: RoutingProvenance
+
+
+class MovementPlan(DomainModel):
+    route_id: NonEmptyRouteId
+    pattern_id: NonEmptyServicePatternId
+    source_stop_id: NonEmptyStopId
+    destination_stop_id: NonEmptyStopId
+    reference_scheduled_trip_id: NonEmptyScheduledTripId
+    mode: EventMode
+    deadhead: MovementLeg
+    service: MovementLeg
+    return_leg: MovementLeg
+    dispatch_time: VancouverDateTime
+    estimated_arrival_time: VancouverDateTime
+    service_departure_time: VancouverDateTime
+    estimated_completion_time: VancouverDateTime
+    estimated_return_time: VancouverDateTime
+    waiting_seconds: NonNegativeInt
+    arrival_lateness_seconds: NonNegativeInt
+    total_distance_m: NonNegativeFloat
+
+    @model_validator(mode="after")
+    def valid_plan(self) -> Self:
+        if (
+            self.deadhead.kind is not MovementLegKind.DEADHEAD
+            or self.service.kind is not MovementLegKind.SERVICE
+            or self.return_leg.kind is not MovementLegKind.RETURN
+        ):
+            raise ValueError("movement plan legs are out of order")
+        times = (
+            self.dispatch_time,
+            self.estimated_arrival_time,
+            self.service_departure_time,
+            self.estimated_completion_time,
+            self.estimated_return_time,
+        )
+        if tuple(sorted(times)) != times:
+            raise ValueError("movement plan timestamps must be chronological")
+        expected_distance = (
+            self.deadhead.distance_m
+            + self.service.distance_m
+            + self.return_leg.distance_m
+        )
+        if abs(self.total_distance_m - expected_distance) > 1e-6:
+            raise ValueError("movement plan total distance is inconsistent")
+        return self
+
+
 class RouteRef(DomainModel):
     route_id: NonEmptyRouteId
     line_key: NonEmptyLineKey
@@ -441,6 +510,10 @@ class AdditionalTrip(DomainModel):
     added_capacity: PositiveInt
     rationale: NonEmptyText
     source_priority: NonNegativeFloat
+    source_route: NonEmptyText | None = None
+    destination: NonEmptyText | None = None
+    selected_candidate: RecommendationCandidate | None = None
+    movement_plan: MovementPlan | None = None
 
     @model_validator(mode="after")
     def valid_timing(self) -> Self:

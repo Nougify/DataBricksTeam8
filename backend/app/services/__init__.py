@@ -1,6 +1,7 @@
 from app.services.activation import EventActivationService
 from app.services.clock import (
     BoundaryPriority,
+    BoundaryRegistration,
     BoundaryResult,
     FakeMonotonicTimeSource,
     MonotonicTimeSource,
@@ -15,9 +16,15 @@ from app.services.coordinator import (
     MutationCoordinator,
 )
 from app.services.events import EventSink, InMemoryEventSink
+from app.services.proposals import (
+    ProposalConflictError,
+    ProposalNotFoundError,
+    ProposalService,
+)
 
 __all__ = [
     "BoundaryPriority",
+    "BoundaryRegistration",
     "BoundaryResult",
     "CoordinatorSnapshot",
     "EpochConflictError",
@@ -28,6 +35,9 @@ __all__ = [
     "MonotonicTimeSource",
     "Mutation",
     "MutationCoordinator",
+    "ProposalConflictError",
+    "ProposalNotFoundError",
+    "ProposalService",
     "SimulationClockController",
     "SystemMonotonicTimeSource",
     "initial_clock",

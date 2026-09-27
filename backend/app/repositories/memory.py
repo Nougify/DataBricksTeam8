@@ -60,6 +60,9 @@ class StateEditor:
     def trip(self, trip_id: AdditionalTripId) -> AdditionalTrip | None:
         return self._trips.get(trip_id)
 
+    def buses(self) -> tuple[Bus, ...]:
+        return tuple(self._buses[key] for key in sorted(self._buses, key=str))
+
     def put_bus(self, bus: Bus) -> None:
         self._buses[BusId(bus.id)] = bus
 
@@ -137,6 +140,27 @@ def validate_entities(state: SimulationEntities) -> None:
             raise ValueError(f"trip {trip.id} references missing event {event_id}")
         if trip.id not in event.additional_trip_ids:
             raise ValueError(f"trip {trip.id} is not linked by event {event_id}")
+        if (
+            trip.status is AdditionalTripStatus.PROPOSED
+            and bus.proposed_trip_id != trip.id
+        ):
+            raise ValueError(f"proposed trip {trip.id} lacks its bus reservation")
+        if (
+            trip.status
+            in {
+                AdditionalTripStatus.APPROVED,
+                AdditionalTripStatus.BUS_EN_ROUTE,
+                AdditionalTripStatus.IN_SERVICE,
+            }
+            and bus.assigned_trip_id != trip.id
+        ):
+            raise ValueError(f"active trip {trip.id} lacks its bus assignment")
+        if trip.status in {
+            AdditionalTripStatus.REJECTED,
+            AdditionalTripStatus.EXPIRED,
+            AdditionalTripStatus.CANCELLED,
+        } and (bus.proposed_trip_id == trip.id or bus.assigned_trip_id == trip.id):
+            raise ValueError(f"terminal trip {trip.id} still reserves its bus")
         if trip.status in active_statuses:
             if bus_id in active_by_bus:
                 raise ValueError(f"bus {bus_id} has more than one active trip")

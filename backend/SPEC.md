@@ -253,9 +253,9 @@ DispatchEvent = {
   suggested_extra_buses: integer,
   priority_score: number,
   recommendations: EventRecommendation[],
-  status: "PENDING" | "AWAITING_APPROVAL" | "DISPATCHED"
-        | "COMPLETED" | "NO_MATCHING_ROUTE" | "NO_BUS_AVAILABLE"
-        | "EXPIRED" | "INVALID_SOURCE",
+  status: "PENDING" | "NO_ACTION_REQUIRED" | "AWAITING_APPROVAL" | "DISPATCHED"
+         | "COMPLETED" | "NO_MATCHING_ROUTE" | "NO_BUS_AVAILABLE"
+         | "EXPIRED" | "REJECTED" | "INVALID_SOURCE",
   additional_trip_ids: string[],
   source: {split: string?, direction: string?, link: string?, version: string?}
 }
@@ -279,6 +279,39 @@ Bus = {
   proposed_trip_id: string?
 }
 
+MovementLeg = {
+  kind: "DEADHEAD" | "SERVICE" | "RETURN",
+  path: GeoJSON LineString,
+  distance_m: number,
+  duration_seconds: integer,
+  provenance: {
+    provider: string,
+    is_approximation: boolean,
+    method: string,
+    speed_kph: number?
+  }
+}
+
+MovementPlan = {
+  route_id: string,
+  pattern_id: string,
+  source_stop_id: string,
+  destination_stop_id: string,
+  reference_scheduled_trip_id: string,
+  mode: "REACTIVE" | "PROACTIVE",
+  deadhead: MovementLeg,
+  service: MovementLeg,
+  return_leg: MovementLeg,
+  dispatch_time: timestamp,
+  estimated_arrival_time: timestamp,
+  service_departure_time: timestamp,
+  estimated_completion_time: timestamp,
+  estimated_return_time: timestamp,
+  waiting_seconds: integer,
+  arrival_lateness_seconds: integer,
+  total_distance_m: number
+}
+
 AdditionalTrip = {
   id: string,
   dispatch_event_id: string,
@@ -295,7 +328,11 @@ AdditionalTrip = {
   estimated_completion_time: timestamp?,
   added_capacity: integer,
   rationale: string,
-  source_priority: number
+  source_priority: number,
+  source_route: string?,
+  destination: string?,
+  selected_candidate: RecommendationCandidate?,
+  movement_plan: MovementPlan?
 }
 ```
 
@@ -389,6 +426,9 @@ lateness failures are typed and never produce partial plans or silent fallback.
 Human approval mode reserves the selected bus while the proposal is pending.
 Approval dispatches it; rejection or expiry releases it. Automatic mode may
 approve immediately. A bus may be reserved by only one proposal or trip.
+Approval recomputes the immutable movement plan from the current simulation time.
+If the plan is no longer feasible, the backend atomically cancels the proposal,
+releases the bus, and reports the typed planning reason as a conflict.
 
 ### 6.4 Movement
 

@@ -70,11 +70,20 @@ class BoundaryPriority(IntEnum):
 class BoundaryResult:
     events: tuple[PendingEvent, ...] = ()
     request_auto_pause: bool = False
+    registrations: tuple[BoundaryRegistration, ...] = ()
 
 
 BoundaryHandler = Callable[[StateEditor, SimulationClock], BoundaryResult]
 BoundaryKey = tuple[str, str]
 SeekHandler = Callable[[VancouverDateTime], SimulationClock]
+
+
+@dataclass(frozen=True)
+class BoundaryRegistration:
+    at: VancouverDateTime
+    priority: BoundaryPriority
+    handler: BoundaryHandler
+    key: BoundaryKey | None = None
 
 
 @dataclass(order=True)
@@ -367,6 +376,7 @@ class SimulationClockController:
 
     def _process_boundaries(self, due: list[_Boundary]) -> SimulationClock:
         boundary_time = due[0].at
+        registrations: list[BoundaryRegistration] = []
 
         def apply(editor: StateEditor, clock: SimulationClock) -> Mutation[None]:
             advanced = _clock_at(clock, boundary_time)
@@ -375,6 +385,7 @@ class SimulationClockController:
             for boundary in due:
                 outcome = boundary.handler(editor, advanced)
                 events.extend(outcome.events)
+                registrations.extend(outcome.registrations)
                 auto_pause = auto_pause or outcome.request_auto_pause
             if auto_pause and advanced.auto_pause_on_proposal:
                 advanced = _clock_at(advanced, boundary_time, status=ClockStatus.PAUSED)
@@ -392,6 +403,13 @@ class SimulationClockController:
         for boundary in due:
             if boundary.key is not None:
                 self._boundary_keys.discard(boundary.key)
+        for registration in registrations:
+            self.register_boundary(
+                registration.at,
+                registration.priority,
+                registration.handler,
+                key=registration.key,
+            )
         return self.clock
 
     def _commit_clock(

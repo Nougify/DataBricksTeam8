@@ -10,10 +10,12 @@ from app.repositories.memory import StateEditor
 from app.services.clock import (
     BoundaryHandler,
     BoundaryPriority,
+    BoundaryRegistration,
     BoundaryResult,
     SimulationClockController,
 )
 from app.services.coordinator import Mutation, MutationCoordinator
+from app.services.proposals import ProposalService
 
 EVENT_BOUNDARY_NAMESPACE = "dispatch-event"
 
@@ -26,10 +28,12 @@ class EventActivationService:
         reader: EventReader,
         coordinator: MutationCoordinator,
         clock: SimulationClockController,
+        proposals: ProposalService | None = None,
     ) -> None:
         self._reader = reader
         self._coordinator = coordinator
         self._clock = clock
+        self._proposals = proposals
 
     def start(self) -> None:
         self._clock.set_seek_handler(self.rebuild_at)
@@ -49,15 +53,25 @@ class EventActivationService:
         if not eligible:
             return
 
-        def activate(editor: StateEditor, clock: SimulationClock) -> Mutation[None]:
+        def activate(
+            editor: StateEditor, clock: SimulationClock
+        ) -> Mutation[tuple[BoundaryRegistration, ...]]:
             events: list[PendingEvent] = []
+            registrations: list[BoundaryRegistration] = []
             for event in eligible:
-                pending = self._activate(editor, clock, event)
-                if pending is not None:
-                    events.append(pending)
-            return Mutation(None, tuple(events))
+                outcome = self._activate(editor, clock, event)
+                events.extend(outcome.events)
+                registrations.extend(outcome.registrations)
+            return Mutation(tuple(registrations), tuple(events))
 
-        self._coordinator.transact(activate)
+        registrations = self._coordinator.transact(activate)
+        for registration in registrations:
+            self._clock.register_boundary(
+                registration.at,
+                registration.priority,
+                registration.handler,
+                key=registration.key,
+            )
 
     def _schedule_after(self, at: VancouverDateTime) -> None:
         maximum = self._clock.clock.max_time.astimezone(UTC)
@@ -79,8 +93,7 @@ class EventActivationService:
 
     def _activation_handler(self, event: DispatchEvent) -> BoundaryHandler:
         def activate(editor: StateEditor, clock: SimulationClock) -> BoundaryResult:
-            pending = self._activate(editor, clock, event)
-            return BoundaryResult(events=(pending,) if pending is not None else ())
+            return self._activate(editor, clock, event)
 
         return activate
 
@@ -89,15 +102,25 @@ class EventActivationService:
         del editor, clock
         return BoundaryResult()
 
-    @staticmethod
     def _activate(
-        editor: StateEditor, clock: SimulationClock, event: DispatchEvent
-    ) -> PendingEvent | None:
+        self, editor: StateEditor, clock: SimulationClock, event: DispatchEvent
+    ) -> BoundaryResult:
         if editor.dispatch_event(DispatchEventId(event.id)) is not None:
-            return None
+            return BoundaryResult()
         editor.put_dispatch_event(event)
-        return PendingEvent(
-            type=EventType.DISPATCH_EVENT_UPDATED,
-            simulation_time=clock.current_time,
-            data=event,
+        if self._proposals is not None:
+            created = self._proposals.create_for_event(editor, clock, event)
+            return BoundaryResult(
+                events=created.events,
+                request_auto_pause=created.request_auto_pause,
+                registrations=created.registrations,
+            )
+        return BoundaryResult(
+            events=(
+                PendingEvent(
+                    type=EventType.DISPATCH_EVENT_UPDATED,
+                    simulation_time=clock.current_time,
+                    data=event,
+                ),
+            )
         )

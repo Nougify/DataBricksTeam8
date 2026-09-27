@@ -21,21 +21,20 @@ Completed foundations:
   direction, pattern, and service-date candidates.
 - Strict file-backed and generated backend fleets with immutable reset state,
   deterministic ordering, and actual fleet metadata.
-- Event, bus, trip, and route read endpoints, expanded metadata, epoch-reset seek,
-  and atomic idempotent approval/rejection for proposals that already exist.
+- Deterministic proposal creation with recommendation fallback, persisted movement
+  plans, fleet/policy caps, stable IDs, atomic reservation, manual expiry,
+  automatic approval, and idempotent decisions.
+- Event, bus, trip, and route read endpoints, expanded metadata, and epoch-reset
+  seek.
 
 Partial or superseded implementation still present:
 
-- Event activation and route planning are coordinator-ready, but proposal creation
-  and downstream event status transitions remain for chunk 06.
-- Approval and rejection work, but no production service creates, expires, or
-  automatically approves proposals.
 - Seek rebuilds event activation but does not replay movement or recorded decisions.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **06 - Proposal, Reservation, And Approval**,
-followed by movement and replay. Do not build additional forecast/origin/analytics
-endpoints against the superseded contract.
+The next implementation step is **08 - Movement Lifecycle**, followed by replay.
+Do not build additional forecast/origin/analytics endpoints against the superseded
+contract.
 
 ### 1.1 Implementation Status
 
@@ -46,7 +45,7 @@ endpoints against the superseded contract.
 | 03 Event repository and activation | Complete | Loaded events activate once through coordinator-owned keyed boundaries |
 | 04 GTFS recommendation mapping | Complete | Typed deterministic route, destination, pattern, direction, and service-date candidates |
 | 05 Backend fleet configuration | Complete | Strict file-backed fleets, generated fallback, metadata, ordering, and reset state |
-| 06 Proposal and approval | Partial | Proposal creation, reservation, expiry, automatic approval, and fleet caps |
+| 06 Proposal and approval | Complete | Deterministic creation, reservation, expiry, decisions, automatic mode, and caps |
 | 07 Routing foundations | Complete | Typed deterministic deadhead, GTFS service, return, and lifecycle plans |
 | 08 Movement lifecycle | Not started | Bus/trip progression, interpolation, completion, and release |
 | 09 Deterministic seek | Partial | Replay boundaries and recorded human decisions through the target |
@@ -58,21 +57,18 @@ endpoints against the superseded contract.
 
 Complete the following in dependency order:
 
-1. Implement event-to-proposal creation: recommendation fallback, bus ranking,
-   suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
-   rollback, and automatic approval mode.
-2. Implement movement boundaries and interpolation through reserved, deadheading,
+1. Implement movement boundaries and interpolation through reserved, deadheading,
    waiting, in-service, returning, completed, and available states.
-3. Make seek rebuild state and replay all canonical boundaries and eligible human
+2. Make seek rebuild state and replay all canonical boundaries and eligible human
    decisions through the target while preserving old state on load/replay failure.
-4. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+3. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-5. Replace the root health-only frontend with clock controls, event/proposal
+4. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-6. Select an explicit Databricks profile and validate the live/exported event
+5. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-7. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+6. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -256,6 +252,12 @@ without fleet information from Databricks.
 ### 06 - Proposal, Reservation, And Approval
 
 **Depends on:** 03, 04, 05, and 07.
+
+**Status:** Complete. Event activation now creates proposals in the same coordinator
+transaction, persists the selected GTFS candidate and immutable movement plan,
+reserves buses, schedules keyed expiry boundaries, and supports automatic or
+manual decisions. Approval replans against current simulation time; an infeasible
+late approval cancels the proposal and releases its reservation atomically.
 
 - For each actionable event, sort recommendations and feasible buses
   deterministically.

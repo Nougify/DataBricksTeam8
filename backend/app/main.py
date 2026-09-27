@@ -11,14 +11,7 @@ from pydantic import BaseModel
 from app.config import DataMode, Settings, get_settings
 from app.data.adapters import build_event_source
 from app.data.store import EventWindowStore
-from app.domain.events import EventType, PendingEvent
-from app.domain.models import (
-    AdditionalTrip,
-    AdditionalTripStatus,
-    BusStatus,
-    DispatchEvent,
-    EventStatus,
-)
+from app.domain.models import DispatchEvent, EventStatus
 from app.domain.types import (
     AdditionalTripId,
     BusId,
@@ -28,7 +21,7 @@ from app.domain.types import (
 )
 from app.errors import install_error_handlers
 from app.fleet import load_fleet
-from app.repositories.memory import StateEditor, entities_from
+from app.repositories.memory import entities_from
 from app.routing import ItineraryComposer, build_routing_service
 from app.runtime import RuntimeOwner
 from app.services.activation import EventActivationService
@@ -37,8 +30,13 @@ from app.services.clock import (
     SystemMonotonicTimeSource,
     initial_clock,
 )
-from app.services.coordinator import Mutation, MutationCoordinator
+from app.services.coordinator import MutationCoordinator
 from app.services.events import InMemoryEventSink
+from app.services.proposals import (
+    ProposalConflictError,
+    ProposalNotFoundError,
+    ProposalService,
+)
 from app.transit import (
     RecommendationMapper,
     build_fixture_transit_index,
@@ -124,8 +122,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ),
         )
         clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
-        activation = EventActivationService(data.reader(), coordinator, clock)
-        activation.start()
         routing = build_routing_service(
             resolved_settings.routing_provider,
             resolved_settings.routing_speed_kph,
@@ -135,6 +131,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             routing,
             resolved_settings.proactive_lateness_tolerance_seconds,
         )
+        proposals = ProposalService(coordinator, itinerary, resolved_settings)
+        activation = EventActivationService(
+            data.reader(), coordinator, clock, proposals
+        )
+        activation.start()
         application.state.runtime = RuntimeOwner(
             settings=resolved_settings,
             data=data,
@@ -145,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             coordinator=coordinator,
             clock=clock,
             activation=activation,
+            proposals=proposals,
             events=events,
         )
         clock_task = asyncio.create_task(clock.run())
@@ -374,98 +376,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.post("/api/v1/additional-trips/{trip_id}/approve")
     async def approve_additional_trip(trip_id: str) -> dict[str, object]:
         runtime: RuntimeOwner = application.state.runtime
-
-        def approve(editor: StateEditor) -> Mutation[AdditionalTrip]:
-            trip = editor.trip(AdditionalTripId(trip_id))
-            if trip is None:
-                raise HTTPException(status_code=404, detail="additional trip not found")
-            if trip.status is AdditionalTripStatus.APPROVED:
-                return Mutation(trip)
-            if trip.status is not AdditionalTripStatus.PROPOSED:
-                raise HTTPException(status_code=409, detail="trip is not proposed")
-            bus = editor.bus(BusId(trip.bus_id))
-            if bus is None or bus.proposed_trip_id != trip.id:
-                raise HTTPException(
-                    status_code=409, detail="bus reservation is missing"
-                )
-            updated_trip = trip.model_copy(
-                update={"status": AdditionalTripStatus.APPROVED}
-            )
-            updated_bus = bus.model_copy(
-                update={
-                    "assigned_trip_id": trip.id,
-                    "proposed_trip_id": None,
-                    "status": BusStatus.RESERVED,
-                }
-            )
-            editor.put_trip(updated_trip)
-            editor.put_bus(updated_bus)
-            return Mutation(
-                updated_trip,
-                (
-                    PendingEvent(
-                        type=EventType.PROPOSAL_UPDATED,
-                        simulation_time=runtime.clock.clock.current_time,
-                        data=updated_trip,
-                    ),
-                    PendingEvent(
-                        type=EventType.BUS_UPDATED,
-                        simulation_time=runtime.clock.clock.current_time,
-                        data=updated_bus,
-                    ),
-                ),
-            )
-
-        result = runtime.coordinator.mutate(approve)
-        return cast(dict[str, object], result.model_dump(mode="json"))
+        try:
+            result = runtime.proposals.approve(AdditionalTripId(trip_id))
+        except ProposalNotFoundError as exc:
+            raise HTTPException(
+                status_code=404, detail="additional trip not found"
+            ) from exc
+        except ProposalConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.conflict_reason is not None:
+            raise HTTPException(status_code=409, detail=result.conflict_reason)
+        return cast(dict[str, object], result.trip.model_dump(mode="json"))
 
     @application.post("/api/v1/additional-trips/{trip_id}/reject")
     async def reject_additional_trip(trip_id: str) -> dict[str, object]:
         runtime: RuntimeOwner = application.state.runtime
-
-        def reject(editor: StateEditor) -> Mutation[AdditionalTrip]:
-            trip = editor.trip(AdditionalTripId(trip_id))
-            if trip is None:
-                raise HTTPException(status_code=404, detail="additional trip not found")
-            if trip.status is AdditionalTripStatus.REJECTED:
-                return Mutation(trip)
-            if trip.status is not AdditionalTripStatus.PROPOSED:
-                raise HTTPException(status_code=409, detail="trip is not proposed")
-            bus = editor.bus(BusId(trip.bus_id))
-            if bus is None or bus.proposed_trip_id != trip.id:
-                raise HTTPException(
-                    status_code=409, detail="bus reservation is missing"
-                )
-            updated_trip = trip.model_copy(
-                update={"status": AdditionalTripStatus.REJECTED}
-            )
-            updated_bus = bus.model_copy(
-                update={
-                    "assigned_trip_id": None,
-                    "proposed_trip_id": None,
-                    "status": BusStatus.AVAILABLE,
-                }
-            )
-            editor.put_trip(updated_trip)
-            editor.put_bus(updated_bus)
-            return Mutation(
-                updated_trip,
-                (
-                    PendingEvent(
-                        type=EventType.PROPOSAL_UPDATED,
-                        simulation_time=runtime.clock.clock.current_time,
-                        data=updated_trip,
-                    ),
-                    PendingEvent(
-                        type=EventType.BUS_UPDATED,
-                        simulation_time=runtime.clock.clock.current_time,
-                        data=updated_bus,
-                    ),
-                ),
-            )
-
-        result = runtime.coordinator.mutate(reject)
-        return cast(dict[str, object], result.model_dump(mode="json"))
+        try:
+            result = runtime.proposals.reject(AdditionalTripId(trip_id))
+        except ProposalNotFoundError as exc:
+            raise HTTPException(
+                status_code=404, detail="additional trip not found"
+            ) from exc
+        except ProposalConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return cast(dict[str, object], result.trip.model_dump(mode="json"))
 
     return application
 

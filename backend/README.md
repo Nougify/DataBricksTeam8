@@ -61,6 +61,17 @@ legs. Service paths and durations come from the selected GTFS pattern. Set
 proactive plans; reactive plans report post-event lateness without rejecting a
 route for lateness alone.
 
+## Proposal lifecycle
+
+Actionable events select the first feasible recommendation and rank GTFS
+candidate/bus combinations deterministically. Proposal count is capped by the
+rounded source suggestion, `MAX_BUSES_PER_EVENT`, and available fleet. In
+`APPROVAL_MODE=MANUAL`, buses remain reserved until approval, rejection, or
+`APPROVAL_TIMEOUT_MINUTES`; `AUTO_PAUSE_ON_PROPOSAL=true` pauses at creation. In
+`APPROVAL_MODE=AUTOMATIC`, feasible trips are approved immediately. Manual
+approval replans at the current simulation time and cancels safely if the route is
+no longer feasible.
+
 ## Checks
 
 ```sh
