@@ -276,6 +276,8 @@ class RecommendationMapper:
                     pattern_id=pattern.id,
                     source_stop_id=pattern.stops[source_index].stop.id,
                     destination_stop_id=pattern.stops[destination_index].stop.id,
+                    source_stop_sequence=pattern.stops[source_index].sequence,
+                    destination_stop_sequence=pattern.stops[destination_index].sequence,
                     direction_id=pattern.direction_id,
                     requested_service_date=requested_date,
                     feed_service_date=resolution.service_date,

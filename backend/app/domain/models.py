@@ -121,11 +121,19 @@ class RecommendationCandidate(DomainModel):
     pattern_id: NonEmptyServicePatternId
     source_stop_id: NonEmptyStopId
     destination_stop_id: NonEmptyStopId
+    source_stop_sequence: NonNegativeInt
+    destination_stop_sequence: NonNegativeInt
     direction_id: int | None
     requested_service_date: date
     feed_service_date: date
     representative_service: bool
     scheduled_trip_ids: tuple[NonEmptyScheduledTripId, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def destination_follows_source(self) -> Self:
+        if self.destination_stop_sequence <= self.source_stop_sequence:
+            raise ValueError("candidate destination must follow source")
+        return self
 
 
 class EventRecommendation(DomainModel):

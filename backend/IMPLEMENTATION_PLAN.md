@@ -9,14 +9,15 @@ backend-owned simulated fleet.
 Completed foundations:
 
 - FastAPI service, validated settings, CORS, health, Docker baseline, coordinator,
-  event sequencing, bounded clock, GTFS index, and replaceable routing.
+  event sequencing, bounded clock, GTFS index, replaceable routing, and complete
+  deadhead/service/return itinerary composition.
 - Canonical dispatch-event imports with proactive/reactive timing, derived surge
   ratio, suggested-bus rounding, deterministic grouping, source metadata, and
   strict row validation.
 - Fixture, exported-event, and bounded parameterized Databricks source modes with
   atomic event-window replacement and no fallback after source failure.
 - Actionable-time visibility masking in `/state` and dispatch-event reads.
-- Typed source recommendation mapping to deterministic GTFS route, destination,
+- Typed recommendation mapping to deterministic GTFS route, destination,
   direction, pattern, and service-date candidates.
 - Strict file-backed and generated backend fleets with immutable reset state,
   deterministic ordering, and actual fleet metadata.
@@ -25,17 +26,16 @@ Completed foundations:
 
 Partial or superseded implementation still present:
 
-- Event activation is coordinator-owned and deterministic, but proposal creation
+- Event activation and route planning are coordinator-ready, but proposal creation
   and downstream event status transitions remain for chunk 06.
 - Approval and rejection work, but no production service creates, expires, or
   automatically approves proposals.
 - Seek rebuilds event activation but does not replay movement or recorded decisions.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **07 - Routing And Movement Foundations**,
-followed by **06 - Proposal, Reservation, And Approval** before movement and
-replay. Do not build additional forecast/origin/analytics endpoints against the
-superseded contract.
+The next implementation step is **06 - Proposal, Reservation, And Approval**,
+followed by movement and replay. Do not build additional forecast/origin/analytics
+endpoints against the superseded contract.
 
 ### 1.1 Implementation Status
 
@@ -47,7 +47,7 @@ superseded contract.
 | 04 GTFS recommendation mapping | Complete | Typed deterministic route, destination, pattern, direction, and service-date candidates |
 | 05 Backend fleet configuration | Complete | Strict file-backed fleets, generated fallback, metadata, ordering, and reset state |
 | 06 Proposal and approval | Partial | Proposal creation, reservation, expiry, automatic approval, and fleet caps |
-| 07 Routing foundations | Partial | Deadhead, service, and return itinerary composition |
+| 07 Routing foundations | Complete | Typed deterministic deadhead, GTFS service, return, and lifecycle plans |
 | 08 Movement lifecycle | Not started | Bus/trip progression, interpolation, completion, and release |
 | 09 Deterministic seek | Partial | Replay boundaries and recorded human decisions through the target |
 | 10 REST and WebSocket | Partial | Canonical v3 trip schemas, `/ws`, reconnect, gap, and reset handling |
@@ -58,23 +58,21 @@ superseded contract.
 
 Complete the following in dependency order:
 
-1. Compose deadhead, service, and return paths and times. Apply proactive lateness
-   policy without rejecting normal reactive post-event arrivals.
-2. Implement event-to-proposal creation: recommendation fallback, bus ranking,
+1. Implement event-to-proposal creation: recommendation fallback, bus ranking,
    suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
    rollback, and automatic approval mode.
-3. Implement movement boundaries and interpolation through reserved, deadheading,
+2. Implement movement boundaries and interpolation through reserved, deadheading,
    waiting, in-service, returning, completed, and available states.
-4. Make seek rebuild state and replay all canonical boundaries and eligible human
+3. Make seek rebuild state and replay all canonical boundaries and eligible human
    decisions through the target while preserving old state on load/replay failure.
-5. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+4. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-6. Replace the root health-only frontend with clock controls, event/proposal
+5. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-7. Select an explicit Databricks profile and validate the live/exported event
+6. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-8. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+7. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -223,12 +221,6 @@ events without consulting Databricks per tick.
 
 **Depends on:** 01.
 
-**Status:** Complete. Source aliases are validated against immutable GTFS data.
-Every recommendation retains either stable service-backed route/pattern/source and
-destination-stop candidates or a typed visible failure. Matching enforces hub
-service, downstream destination order, optional direction, representative service
-dates, dispatch eligibility, and previous-service-day overflow trips.
-
 - Preserve immutable GTFS routes, stops, trips, patterns, schedules, and shapes.
 - Add explicit source hub and route alias maps.
 - Resolve source destination labels to eligible stops/areas where required.
@@ -245,12 +237,6 @@ GTFS candidates or a precise visible failure.
 ### 05 - Backend Fleet Configuration
 
 **Depends on:** 01.
-
-**Status:** Complete. Strict JSON fleet definitions support stable heterogeneous
-bus IDs, positive capacities, canonical initial/home hubs, and empty fleets. A
-generated development fallback uses an explicit default hub. The immutable fleet
-definition drives coordinator reset, metadata, and deterministic available-bus
-ordering without Databricks fleet inputs.
 
 - Keep fleet identity, capacity, initial location, and status entirely in backend
   configuration.
@@ -296,6 +282,11 @@ proposals without partial state.
 ### 07 - Routing And Movement Foundations
 
 **Depends on:** 01; reusable work already exists.
+
+**Status:** Complete. The runtime composes immutable all-or-nothing plans with
+provider-routed deadhead and home-return legs, GTFS-shaped and scheduled service,
+whole-second timing, proactive target/tolerance handling, honest reactive lateness,
+stable reference trips, and typed provider/geometry/timing failures.
 
 - Retain replaceable routing with a deterministic straight-line fallback.
 - Build deadhead, service, and return paths from backend locations and GTFS.
@@ -437,7 +428,7 @@ outside the critical path and must not delay Checkpoint D.
 | Query bounds | Open | Choose demo range and seek window policy |
 | Fleet configuration | Open | Choose bus IDs, capacities, and initial locations |
 | Approval mode | Open | Choose manual or automatic demo behavior |
-| Reactive lateness | Open | Configure allowed post-event dispatch behavior |
+| Reactive lateness | Decided | Permit post-event arrival and report lateness honestly |
 | Human decisions during seek | Decided | Replay decisions at/before target; discard later decisions |
 
 Open inputs must be resolved before chunk 11. They may not be hidden behind fixture

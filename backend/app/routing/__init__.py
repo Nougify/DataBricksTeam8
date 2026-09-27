@@ -1,4 +1,13 @@
-from app.routing.models import RoutingProvenance, RoutingResult
+from app.routing.models import (
+    MovementLeg,
+    MovementLegKind,
+    MovementPlan,
+    MovementPlanFailure,
+    MovementPlanFailureCode,
+    RoutingProvenance,
+    RoutingResult,
+)
+from app.routing.planner import ItineraryComposer, MovementPlanOutcome
 from app.routing.service import (
     RoutingProvider,
     RoutingService,
@@ -8,6 +17,13 @@ from app.routing.service import (
 )
 
 __all__ = [
+    "ItineraryComposer",
+    "MovementLeg",
+    "MovementLegKind",
+    "MovementPlan",
+    "MovementPlanFailure",
+    "MovementPlanFailureCode",
+    "MovementPlanOutcome",
     "RoutingProvenance",
     "RoutingProvider",
     "RoutingResult",

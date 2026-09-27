@@ -37,6 +37,7 @@ def test_lifespan_installs_one_application_runtime() -> None:
         assert runtime.transit.feed_version == "fall-2026"
         assert isinstance(runtime.routing, StraightLineRoutingService)
         assert runtime.routing.speed_kph == 30
+        assert runtime.itinerary.routing is runtime.routing
         assert application.state.runtime.coordinator is runtime.coordinator
         assert application.state.runtime.clock is runtime.clock
         assert runtime.clock.clock.status.value == "PAUSED"

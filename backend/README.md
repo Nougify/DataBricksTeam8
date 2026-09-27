@@ -55,6 +55,12 @@ must name hubs in the loaded GTFS-backed transit index. `{ "buses": [] }` is a
 valid empty fleet. `config/fleet.json` is the bundled reproducible example and is
 copied into the backend container.
 
+Routing uses `ROUTING_PROVIDER` and `ROUTING_SPEED_KPH` for deadhead and return
+legs. Service paths and durations come from the selected GTFS pattern. Set
+`PROACTIVE_LATENESS_TOLERANCE_SECONDS` to the maximum accepted late arrival for
+proactive plans; reactive plans report post-event lateness without rejecting a
+route for lateness alone.
+
 ## Checks
 
 ```sh

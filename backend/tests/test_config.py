@@ -23,6 +23,7 @@ def test_settings_have_v2_defaults() -> None:
     assert settings.data_mode is DataMode.FIXTURE
     assert settings.routing_provider is RoutingProvider.STRAIGHT_LINE
     assert settings.routing_speed_kph == 30
+    assert settings.proactive_lateness_tolerance_seconds == 0
 
 
 def test_settings_read_environment(monkeypatch: MonkeyPatch) -> None:
@@ -41,6 +42,11 @@ def test_settings_read_environment(monkeypatch: MonkeyPatch) -> None:
 def test_settings_reject_unsupported_simulation_speed(speed: int) -> None:
     with pytest.raises(ValidationError):
         Settings(simulation_speed=speed)
+
+
+def test_settings_reject_negative_proactive_lateness_tolerance() -> None:
+    with pytest.raises(ValidationError):
+        Settings(proactive_lateness_tolerance_seconds=-1)
 
 
 def test_settings_reject_start_outside_bounds() -> None:

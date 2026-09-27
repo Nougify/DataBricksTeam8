@@ -21,6 +21,7 @@ from app.routing import RoutingProvider
 AllowedSimulationSpeed = Literal[1, 60, 300, 900, 3600]
 ApprovalMode = Literal["MANUAL", "AUTOMATIC"]
 NonEmptyString = Annotated[str, StringConstraints(min_length=1)]
+NonNegativeInt = Annotated[int, Field(ge=0)]
 PositiveFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 PositiveInt = Annotated[int, Field(gt=0)]
 UnitWeight = Annotated[float, Field(ge=0, le=1)]
@@ -112,6 +113,7 @@ class Settings(BaseSettings):
 
     routing_provider: RoutingProvider = RoutingProvider.STRAIGHT_LINE
     routing_speed_kph: PositiveFloat = 30
+    proactive_lateness_tolerance_seconds: NonNegativeInt = 0
     return_policy: ReturnPolicy = ReturnPolicy.HOME
     gtfs_source: Path = Path("data/gtfs")
     gtfs_service_day_mapping: dict[DayType, date] = Field(

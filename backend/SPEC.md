@@ -207,6 +207,8 @@ RecommendationCandidate = {
   pattern_id: string,
   source_stop_id: string,
   destination_stop_id: string,
+  source_stop_sequence: integer,
+  destination_stop_sequence: integer,
   direction_id: integer?,
   requested_service_date: date,
   feed_service_date: date,
@@ -375,6 +377,15 @@ For a reactive event, proposal creation starts at `event_time`. Arrival after th
 event begins is expected and must not by itself invalidate the proposal. The API
 reports the ETA and lateness honestly.
 
+For every bus/candidate pair, routing produces an all-or-nothing immutable
+movement plan. Deadhead and home-return legs use the configured routing provider;
+the service leg uses the selected GTFS pattern shape and source-departure to
+destination-arrival offsets. Provider durations round upward to whole seconds.
+The plan records all three paths, distances, durations, lifecycle timestamps,
+waiting time, arrival lateness, routing provenance, and a stable reference
+scheduled trip. Provider, pattern, stop-occurrence, shape, timing, and proactive
+lateness failures are typed and never produce partial plans or silent fallback.
+
 Human approval mode reserves the selected bus while the proposal is pending.
 Approval dispatches it; rejection or expiry releases it. Automatic mode may
 approve immediately. A bus may be reserved by only one proposal or trip.
@@ -494,7 +505,8 @@ Required configuration groups:
 - GTFS: feed path/version and representative service dates.
 - Fleet: optional JSON definition, generated fallback count/capacity/default hub,
   known initial/home locations, and per-event proposal cap.
-- Routing: provider and fallback speed.
+- Routing: provider, fallback speed, return policy, and proactive lateness
+  tolerance in seconds. Reactive arrival lateness is reported but not rejected.
 
 Credentials remain server-side and are never returned by APIs or logs. Production
 must not start in fixture mode. Databricks mode requires all connection and source

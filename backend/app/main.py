@@ -29,7 +29,7 @@ from app.domain.types import (
 from app.errors import install_error_handlers
 from app.fleet import load_fleet
 from app.repositories.memory import StateEditor, entities_from
-from app.routing import build_routing_service
+from app.routing import ItineraryComposer, build_routing_service
 from app.runtime import RuntimeOwner
 from app.services.activation import EventActivationService
 from app.services.clock import (
@@ -130,12 +130,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved_settings.routing_provider,
             resolved_settings.routing_speed_kph,
         )
+        itinerary = ItineraryComposer(
+            transit,
+            routing,
+            resolved_settings.proactive_lateness_tolerance_seconds,
+        )
         application.state.runtime = RuntimeOwner(
             settings=resolved_settings,
             data=data,
             transit=transit,
             fleet=fleet,
             routing=routing,
+            itinerary=itinerary,
             coordinator=coordinator,
             clock=clock,
             activation=activation,
