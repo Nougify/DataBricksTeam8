@@ -8,8 +8,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { getState } from "@/lib/api/endpoints";
 import { isTimeDependentKey } from "@/lib/api/queryKeys";
-import { Envelope, KNOWN_WS_TYPES, WsMessage, type StateResponse } from "@/lib/api/schemas";
-import { reportContractIssue, validateContract } from "@/lib/api/contractIssues";
+import { Envelope, KNOWN_WS_TYPES, StateResponse, WsMessage } from "@/lib/api/schemas";
+import { reportContractIssue } from "@/lib/api/contractIssues";
 import { ENV } from "@/config/env";
 import { handleSimEffects } from "./effects";
 import { useSim, type ConnectionState } from "./store";
@@ -51,7 +51,13 @@ export function parseWsMessage(raw: unknown): WsMessage | null {
     return null;
   }
   if (!KNOWN_WS_TYPES.has(envelope.data.type)) return null;
-  return validateContract(`WS ${envelope.data.type}`, WsMessage, raw);
+  const message = WsMessage.safeParse(raw);
+  if (message.success) return message.data;
+  if (ENV.isDev) {
+    console.error(`Contract mismatch: WS ${envelope.data.type}`, message.error.issues);
+    reportContractIssue(`WS ${envelope.data.type}`);
+  }
+  return null;
 }
 
 let active: LiveConnection | null = null;
@@ -165,6 +171,20 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
   }
 
   function onMessage(raw: unknown) {
+    const bootstrap = StateResponse.safeParse(raw);
+    if (bootstrap.success) {
+      try {
+        store().setSnapshot(bootstrap.data);
+        buffer = [];
+        mode = "live";
+        failures = 0;
+        everSynced = true;
+        setConnection("live");
+      } catch (err) {
+        console.error("Couldn't apply the WebSocket bootstrap", err);
+      }
+      return;
+    }
     const msg = parseWsMessage(raw);
     if (!msg) return;
     if (mode === "live") {
@@ -217,7 +237,14 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
     }
     if (stopped || token !== syncToken) return;
 
-    store().setSnapshot(state);
+    try {
+      store().setSnapshot(state);
+    } catch (err) {
+      console.error("Couldn't apply /state", err);
+      dropTransport();
+      onFailure();
+      return;
+    }
     // Newer-epoch messages mean another seek landed meanwhile; the reducer turns them into another resync.
     const replay = buffer.filter((m) => m.epoch > state.epoch || (m.epoch === state.epoch && m.seq > state.last_seq));
     buffer = [];

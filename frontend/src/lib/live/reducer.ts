@@ -70,7 +70,7 @@ const NO_EFFECTS: SimEffect[] = [];
  * - A non-reset message from a newer epoch means we missed the reset; it triggers one too.
  */
 export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { sim: SimSlice; effects: SimEffect[] } {
-  if (msg.type === "state.reset") {
+  if (msg.type === "state.reset" || msg.type === "system.reset") {
     if (msg.data.epoch <= s.epoch) return { sim: s, effects: NO_EFFECTS };
     return {
       sim: { ...s, resyncing: true, lastSimTime: msg.simulation_time },
@@ -82,6 +82,9 @@ export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { si
     return { sim: { ...s, resyncing: true }, effects: [{ kind: "reset", epoch: msg.epoch }] };
   }
   if (msg.seq <= s.lastSeq) return { sim: s, effects: NO_EFFECTS };
+  if (msg.seq > s.lastSeq + 1) {
+    return { sim: { ...s, resyncing: true }, effects: [{ kind: "reset", epoch: msg.epoch }] };
+  }
 
   const base: SimSlice = { ...s, lastSeq: msg.seq, lastSimTime: msg.simulation_time };
 
@@ -98,6 +101,14 @@ export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { si
       const effects: SimEffect[] = reason === "AUTO_PAUSE_PROPOSAL" ? [{ kind: "auto-paused" }] : NO_EFFECTS;
       return { sim: { ...base, clock, receivedAt: wallNow }, effects };
     }
+    case "clock.updated": {
+      const { reason, ...clock } = msg.data;
+      if (s.clock && clock.epoch < s.clock.epoch) return { sim: base, effects: NO_EFFECTS };
+      const effects: SimEffect[] = reason === "AUTO_PAUSE_PROPOSAL" ? [{ kind: "auto-paused" }] : NO_EFFECTS;
+      return { sim: { ...base, clock, receivedAt: wallNow }, effects };
+    }
+    case "system.error":
+      return { sim: base, effects: NO_EFFECTS };
     case "surge.updated": {
       const surge = msg.data;
       const isNew = !(surge.id in s.surges) && surge.phase !== "RESOLVED";
@@ -150,7 +161,11 @@ export function applyMessages(s: SimSlice, msgs: readonly WsMessage[], wallNow: 
     sim = result.sim;
     effects.push(...result.effects);
     if (result.effects.some((e) => e.kind === "reset")) {
-      return { sim, effects, remaining: msgs.slice(msg.type === "state.reset" ? i + 1 : i) };
+      return {
+        sim,
+        effects,
+        remaining: msgs.slice(msg.type === "state.reset" || msg.type === "system.reset" ? i + 1 : i),
+      };
     }
   }
   return { sim, effects, remaining: [] };

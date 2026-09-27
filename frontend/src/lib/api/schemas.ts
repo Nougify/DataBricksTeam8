@@ -31,7 +31,7 @@ export const RouteRef = z.object({
   route_id: z.string(),
   line_key: z.string(),
   short_name: z.string(),
-  long_name: z.string(),
+  long_name: z.string().nullable(),
   mode: Mode,
   color: z.string().nullable(),
   text_color: z.string().nullable(),
@@ -135,7 +135,7 @@ export const Bus = z.object({
   id: z.string(),
   status: BusStatus,
   location: LatLon,
-  heading_deg: z.number(),
+  heading_deg: z.number().nullable(),
   capacity: z.number(),
   source: z.object({
     type: z.enum(["ROUTE", "DEPOT"]),
@@ -206,7 +206,7 @@ export type ErrorBody = z.infer<typeof ErrorBody>;
 
 // ---------- responses ----------
 
-export const StateResponse = z.object({
+const LegacyStateResponse = z.object({
   epoch: z.number().int(),
   last_seq: z.number().int(),
   simulation: Clock,
@@ -215,6 +215,30 @@ export const StateResponse = z.object({
   buses: z.array(Bus),
   additional_trips: z.array(AdditionalTrip),
 });
+
+const BackendStateResponse = z
+  .object({
+    epoch: z.number().int(),
+    last_seq: z.number().int(),
+    simulation: Clock,
+    dispatch_events: z.array(z.unknown()),
+    buses: z.array(Bus),
+    additional_trips: z.array(z.unknown()),
+  })
+  .transform((state) => ({
+    epoch: state.epoch,
+    last_seq: state.last_seq,
+    simulation: state.simulation,
+    // The v3 backend intentionally does not expose the retired hub/surge models.
+    hubs: [],
+    surges: [],
+    buses: state.buses,
+    // Trip rendering still targets the retired enriched trip shape. Do not cast
+    // authoritative v3 trips into fields the backend does not provide.
+    additional_trips: [],
+  }));
+
+export const StateResponse = z.union([LegacyStateResponse, BackendStateResponse]);
 export type StateResponse = z.infer<typeof StateResponse>;
 
 export const SurgeList = z.array(Surge);
@@ -247,7 +271,7 @@ export type Preset = z.infer<typeof Preset>;
 export const Source = z.object({ name: z.string(), url: z.string().nullable().optional(), used_for: z.string() });
 export type Source = z.infer<typeof Source>;
 
-export const Meta = z.object({
+const LegacyMeta = z.object({
   timezone: z.string(),
   data_start: LocalDate,
   data_end: LocalDate,
@@ -263,6 +287,53 @@ export const Meta = z.object({
   sources: z.array(Source),
   pipeline_refreshed_at: IsoTime.nullable(),
 });
+
+const BackendMeta = z
+  .object({
+    data_mode: z.enum(["fixture", "exported_events", "databricks"]),
+    source_identity: z.string().nullable(),
+    source_version: z.string().nullable(),
+    integration_status: z.string(),
+    integration_error: z.string().nullable(),
+    event_window: z.object({
+      window_start: IsoTime,
+      window_end: IsoTime,
+      loaded_at: IsoTime,
+      provenance: z.string(),
+    }),
+    simulation_bounds: z.object({ min_time: IsoTime, max_time: IsoTime }),
+    supported_speeds: z.array(z.number()),
+    gtfs_version: z.string(),
+    fleet: z.object({
+      size: z.number().int(),
+      total_capacity: z.number().int(),
+      source: z.string(),
+      max_buses_per_event: z.number().int(),
+    }),
+    approval_mode: z.enum(["MANUAL", "AUTOMATIC"]),
+  })
+  .transform((meta) => ({
+    timezone: "America/Vancouver",
+    data_start: meta.event_window.window_start.slice(0, 10),
+    data_end: meta.event_window.window_end.slice(0, 10),
+    default_start_time: meta.simulation_bounds.min_time,
+    allowed_speeds: meta.supported_speeds,
+    forecast_horizons_hours: [],
+    surge_threshold: 1.25,
+    severity_bands: { LOW: 1.25, MEDIUM: 1.5, HIGH: 1.75 },
+    late_night: { start_hour: 22, end_hour_exclusive: 5 },
+    route_load_thresholds: { overcrowded_pct: 85, spare_pct: 50 },
+    day_types: [
+      { id: "mf" as const, label: "Weekday" },
+      { id: "sat" as const, label: "Saturday" },
+      { id: "sun_hol" as const, label: "Sunday / holiday" },
+    ],
+    presets: [],
+    sources: [{ name: meta.source_identity ?? meta.data_mode, used_for: meta.event_window.provenance }],
+    pipeline_refreshed_at: meta.event_window.loaded_at,
+  }));
+
+export const Meta = z.union([LegacyMeta, BackendMeta]);
 export type Meta = z.infer<typeof Meta>;
 
 export const Hub = z.object({
@@ -546,6 +617,9 @@ export const WsMessage = z.discriminatedUnion("type", [
   env("simulation.tick", z.object({ current_time: IsoTime, local_date: LocalDate, hour: Hour })),
   env("simulation.state_changed", Clock.extend({ reason: StateChangedReason })),
   env("state.reset", z.object({ epoch: z.number().int(), reason: z.string() })),
+  env("clock.updated", Clock.extend({ reason: StateChangedReason.nullable() })),
+  env("system.reset", z.object({ epoch: z.number().int(), reason: z.literal("SEEK") })),
+  env("system.error", z.object({ message: z.string() })),
   env("surge.updated", Surge),
   env("dispatch.proposed", AdditionalTrip),
   env("dispatch.approved", AdditionalTrip),
@@ -564,6 +638,9 @@ export const KNOWN_WS_TYPES: ReadonlySet<string> = new Set<WsMessageType>([
   "simulation.tick",
   "simulation.state_changed",
   "state.reset",
+  "clock.updated",
+  "system.reset",
+  "system.error",
   "surge.updated",
   "dispatch.proposed",
   "dispatch.approved",

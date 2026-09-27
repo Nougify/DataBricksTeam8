@@ -2,9 +2,7 @@
 
 // Hubs on the map: GET /hubs with the spec §3 table as first-paint / failure fallback, and the halo maths
 // from DESIGN §8.2 (radius and opacity from the surge index, colour from surge severity or the index band).
-import { useMemo } from "react";
-import { useHubs, useMeta } from "@/lib/api/hooks";
-import type { Hub, HubStatus, Meta, Severity, Surge } from "@/lib/api/schemas";
+import type { Hub, HubStatus, Severity, Surge } from "@/lib/api/schemas";
 import type { LngLatTuple } from "./geo";
 
 export type MapHub = Pick<Hub, "id" | "name" | "location" | "catchment_m">;
@@ -17,21 +15,18 @@ export const FALLBACK_HUBS: readonly MapHub[] = [
 ];
 
 export function useMapHubs(): readonly MapHub[] {
-  const { data } = useHubs();
-  return data && data.length > 0 ? data : FALLBACK_HUBS;
+  return FALLBACK_HUBS;
 }
 
 export const hubLngLat = (h: MapHub): LngLatTuple => [h.location.lon, h.location.lat];
 
 // ---------- halo ----------
 
-export type SeverityBands = Meta["severity_bands"];
+export type SeverityBands = { LOW: number; MEDIUM: number; HIGH: number };
 export const DEFAULT_BANDS: SeverityBands = { LOW: 1.25, MEDIUM: 1.5, HIGH: 1.75 };
 
 export function useSeverityBands(): SeverityBands {
-  const { data } = useMeta();
-  const bands = data?.severity_bands;
-  return useMemo(() => bands ?? DEFAULT_BANDS, [bands]);
+  return DEFAULT_BANDS;
 }
 
 /** `typical` = elevated but under the surge line; the rest are the severity ramp. */
