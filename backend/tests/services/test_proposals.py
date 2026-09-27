@@ -2,8 +2,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from app.config import Settings
-from app.data.adapters import FixtureEventSource
+from app.data.adapters import EventSource, FixtureEventSource
 from app.data.reader import EventReader
+from app.data.store import EventWindowStore
+from app.domain.decisions import HumanDecisionAction
 from app.domain.events import EventType
 from app.domain.models import (
     AdditionalTrip,
@@ -17,6 +19,7 @@ from app.fleet import load_fleet
 from app.repositories import StateEditor, entities_from
 from app.routing import ItineraryComposer, StraightLineRoutingService
 from app.services import (
+    DeterministicSeekService,
     EventActivationService,
     FakeMonotonicTimeSource,
     InMemoryEventSink,
@@ -38,30 +41,45 @@ END = datetime(2026, 7, 10, 15, tzinfo=PACIFIC)
 class ProposalRuntime:
     settings: Settings
     transit: TransitIndex
+    data: EventWindowStore
     coordinator: MutationCoordinator
     clock: SimulationClockController
     time_source: FakeMonotonicTimeSource
     sink: InMemoryEventSink
     movement: MovementLifecycleService
     proposals: ProposalService
+    replay: DeterministicSeekService
 
 
-def make_runtime(settings: Settings | None = None) -> ProposalRuntime:
+def make_runtime(
+    settings: Settings | None = None,
+    *,
+    source: EventSource | None = None,
+    window_start: datetime = START,
+    window_end: datetime = END,
+) -> ProposalRuntime:
     settings = settings or Settings(simulation_speed=3600)
     transit = build_fixture_transit_index(
         settings.gtfs_feed_version, settings.gtfs_service_day_mapping
     )
-    window = FixtureEventSource("test-v1").load_window(START, END)
-    resolved = RecommendationMapper(transit, settings).resolve_window(window)
+    data = EventWindowStore(source or FixtureEventSource("test-v1"))
+    data.refresh_window(window_start, window_end)
+    mapper = RecommendationMapper(transit, settings)
+    resolved = data.install(mapper.resolve_window(data.reader().window))
     fleet = load_fleet(settings, transit)
     sink = InMemoryEventSink()
     coordinator = MutationCoordinator(
         sink,
-        initial_clock(settings, coverage_start=START, coverage_end=END),
+        initial_clock(settings, coverage_start=window_start, coverage_end=window_end),
         entities_from(buses=fleet.buses),
     )
     time_source = FakeMonotonicTimeSource()
-    clock = SimulationClockController(coordinator, time_source)
+    clock = SimulationClockController(
+        coordinator,
+        time_source,
+        seek_min_time=settings.simulation_min_time,
+        seek_max_time=settings.simulation_max_time,
+    )
     itinerary = ItineraryComposer(
         transit,
         StraightLineRoutingService(settings.routing_speed_kph),
@@ -69,16 +87,25 @@ def make_runtime(settings: Settings | None = None) -> ProposalRuntime:
     )
     movement = MovementLifecycleService(coordinator)
     proposals = ProposalService(coordinator, itinerary, settings, clock, movement)
-    EventActivationService(EventReader(resolved), coordinator, clock, proposals).start()
+    activation = EventActivationService(
+        EventReader(resolved.window), coordinator, clock, proposals
+    )
+    activation.start(install_seek_handler=False)
+    replay = DeterministicSeekService(
+        settings, data, mapper, coordinator, clock, activation, proposals
+    )
+    replay.start()
     return ProposalRuntime(
         settings,
         transit,
+        data,
         coordinator,
         clock,
         time_source,
         sink,
         movement,
         proposals,
+        replay,
     )
 
 
@@ -195,6 +222,7 @@ def test_automatic_mode_approves_immediately_without_auto_pause() -> None:
         if bus.status is BusStatus.WAITING
     )
     assert runtime.clock.clock.status.value == "RUNNING"
+    assert snapshot.decisions == ()
 
 
 def test_manual_approval_and_rejection_update_event_and_release_once() -> None:
@@ -203,11 +231,13 @@ def test_manual_approval_and_rejection_update_event_and_release_once() -> None:
     trips = runtime.coordinator.snapshot().entities.trips.list()
 
     approved = runtime.proposals.approve(trips[0].id).trip
+    repeated_approval = runtime.proposals.approve(trips[0].id).trip
     rejected = runtime.proposals.reject(trips[1].id).trip
     repeated = runtime.proposals.reject(trips[1].id).trip
     snapshot = runtime.coordinator.snapshot()
 
     assert approved.status is AdditionalTripStatus.BUS_EN_ROUTE
+    assert repeated_approval == approved
     assert rejected.status is AdditionalTripStatus.REJECTED
     assert repeated == rejected
     event = snapshot.entities.dispatch_events.get(DispatchEventId("valid-event"))
@@ -217,6 +247,10 @@ def test_manual_approval_and_rejection_update_event_and_release_once() -> None:
     rejected_bus = snapshot.entities.buses.get(rejected.bus_id)
     assert approved_bus is not None and approved_bus.assigned_trip_id == approved.id
     assert rejected_bus is not None and rejected_bus.status is BusStatus.AVAILABLE
+    assert [decision.action for decision in snapshot.decisions] == [
+        HumanDecisionAction.APPROVE,
+        HumanDecisionAction.REJECT,
+    ]
 
 
 def test_late_proactive_approval_cancels_and_releases_reservation() -> None:
@@ -234,6 +268,7 @@ def test_late_proactive_approval_cancels_and_releases_reservation() -> None:
     assert decision.trip.status is AdditionalTripStatus.CANCELLED
     assert decision.conflict_reason is not None
     assert bus is not None and bus.status is BusStatus.AVAILABLE
+    assert [item.action for item in snapshot.decisions] == [HumanDecisionAction.APPROVE]
 
 
 def test_high_speed_expiry_releases_pending_buses_exactly_once() -> None:

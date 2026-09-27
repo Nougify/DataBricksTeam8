@@ -10,6 +10,7 @@ from app.services.coordinator import MutationCoordinator
 from app.services.events import EventSink
 from app.services.movement import MovementLifecycleService
 from app.services.proposals import ProposalService
+from app.services.replay import DeterministicSeekService
 from app.transit.index import TransitIndex
 
 
@@ -28,4 +29,5 @@ class RuntimeOwner:
     activation: EventActivationService
     movement: MovementLifecycleService
     proposals: ProposalService
+    replay: DeterministicSeekService
     events: EventSink

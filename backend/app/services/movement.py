@@ -53,7 +53,7 @@ class MovementLifecycleService:
             raise MovementConflictError("approved trip has no movement plan")
         if trip.movement_plan.estimated_return_time > clock.max_time:
             raise MovementConflictError("movement plan exceeds simulation bounds")
-        return self._advance(editor, clock, trip.id)
+        return self.advance(editor, clock, trip.id)
 
     def cancel(self, trip_id: AdditionalTripId) -> AdditionalTrip:
         return self._coordinator.transact(
@@ -109,7 +109,7 @@ class MovementLifecycleService:
             ),
         )
 
-    def _advance(
+    def advance(
         self,
         editor: StateEditor,
         clock: SimulationClock,
@@ -241,7 +241,7 @@ class MovementLifecycleService:
             raise MovementConflictError("movement milestone did not advance")
 
         def advance(editor: StateEditor, current: SimulationClock) -> BoundaryResult:
-            update = self._advance(editor, current, trip.id)
+            update = self.advance(editor, current, trip.id)
             return BoundaryResult(
                 events=update.events, registrations=update.registrations
             )

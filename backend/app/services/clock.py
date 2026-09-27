@@ -170,6 +170,8 @@ class SimulationClockController:
         time_source: MonotonicTimeSource,
         *,
         poll_interval_seconds: float = 0.25,
+        seek_min_time: VancouverDateTime | None = None,
+        seek_max_time: VancouverDateTime | None = None,
     ) -> None:
         if poll_interval_seconds < 0.25:
             raise ValueError(
@@ -183,6 +185,8 @@ class SimulationClockController:
         self._boundary_keys: set[BoundaryKey] = set()
         self._next_registration = 0
         self._seek_handler: SeekHandler | None = None
+        self._seek_min_time = seek_min_time or coordinator.snapshot().clock.min_time
+        self._seek_max_time = seek_max_time or coordinator.snapshot().clock.max_time
         self._lock = RLock()
         self._stop = asyncio.Event()
 
@@ -237,6 +241,30 @@ class SimulationClockController:
             self._boundary_keys = {
                 boundary.key for boundary in retained if boundary.key is not None
             }
+
+    def validate_boundary_replacement(
+        self,
+        registrations: tuple[BoundaryRegistration, ...],
+        *,
+        current_time: VancouverDateTime,
+        max_time: VancouverDateTime,
+    ) -> None:
+        self._build_boundaries(registrations, current_time, max_time)
+
+    def replace_boundaries(
+        self,
+        registrations: tuple[BoundaryRegistration, ...],
+        *,
+        current_time: VancouverDateTime,
+        max_time: VancouverDateTime,
+    ) -> None:
+        with self._lock:
+            boundaries, keys = self._build_boundaries(
+                registrations, current_time, max_time
+            )
+            self._boundaries = boundaries
+            self._boundary_keys = keys
+            self._next_registration = len(boundaries)
 
     def set_seek_handler(self, handler: SeekHandler) -> None:
         with self._lock:
@@ -306,8 +334,7 @@ class SimulationClockController:
 
     def seek(self, at: VancouverDateTime) -> SimulationClock:
         with self._lock:
-            clock = self.clock
-            if not clock.min_time <= at <= clock.max_time:
+            if not self._seek_min_time <= at <= self._seek_max_time:
                 raise ValueError("seek time must be within simulation bounds")
             updated = (
                 self._seek_handler(at)
@@ -316,6 +343,39 @@ class SimulationClockController:
             )
             self._anchor = self._time_source.now()
             return updated
+
+    @staticmethod
+    def _build_boundaries(
+        registrations: tuple[BoundaryRegistration, ...],
+        current_time: VancouverDateTime,
+        max_time: VancouverDateTime,
+    ) -> tuple[list[_Boundary], set[BoundaryKey]]:
+        current_utc = current_time.astimezone(UTC)
+        maximum_utc = max_time.astimezone(UTC)
+        boundaries: list[_Boundary] = []
+        keys: set[BoundaryKey] = set()
+        for order, registration in enumerate(registrations, start=1):
+            at_utc = registration.at.astimezone(UTC)
+            if not current_utc < at_utc <= maximum_utc:
+                raise ValueError(
+                    "replacement boundary must be after current_time and within bounds"
+                )
+            if registration.key is not None:
+                if registration.key in keys:
+                    raise ValueError("replacement boundaries contain a duplicate key")
+                keys.add(registration.key)
+            boundaries.append(
+                _Boundary(
+                    at_utc=at_utc,
+                    priority=registration.priority,
+                    registration_order=order,
+                    at=registration.at,
+                    handler=registration.handler,
+                    key=registration.key,
+                )
+            )
+        heapq.heapify(boundaries)
+        return boundaries, keys
 
     def set_auto_pause_on_proposal(self, enabled: bool) -> SimulationClock:
         with self._lock:

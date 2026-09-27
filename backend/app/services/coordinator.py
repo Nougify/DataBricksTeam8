@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from threading import RLock
 
+from app.domain.decisions import HumanDecision, PendingHumanDecision
 from app.domain.events import EventType, PendingEvent, SequencedEvent, StateResetData
 from app.domain.models import ClockStatus, SimulationClock
 from app.domain.types import Epoch, SequenceNumber, VancouverDateTime
@@ -20,6 +21,7 @@ class Mutation[ResultT]:
     value: ResultT
     events: tuple[PendingEvent, ...] = ()
     clock: SimulationClock | None = None
+    decisions: tuple[PendingHumanDecision, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class CoordinatorSnapshot:
     last_seq: SequenceNumber
     clock: SimulationClock
     entities: SimulationEntities
+    decisions: tuple[HumanDecision, ...]
 
 
 class MutationCoordinator:
@@ -49,6 +52,8 @@ class MutationCoordinator:
             raise ValueError("initial clock epoch must be zero")
         self._clock = initial_clock
         self._last_seq: SequenceNumber = 0
+        self._decisions: tuple[HumanDecision, ...] = ()
+        self._next_decision_order = 1
         self._lock = RLock()
 
     def snapshot(self) -> CoordinatorSnapshot:
@@ -58,7 +63,11 @@ class MutationCoordinator:
                 last_seq=self._last_seq,
                 clock=self._clock,
                 entities=self._entities,
+                decisions=self._decisions,
             )
+
+    def initial_entities(self) -> SimulationEntities:
+        return self._initial_entities
 
     def mutate[ResultT](
         self,
@@ -87,17 +96,27 @@ class MutationCoordinator:
             if candidate_clock.epoch != self._epoch:
                 raise ValueError("candidate clock epoch must match coordinator epoch")
             sequenced = self._sequence(mutation.events, self._epoch)
+            appended_decisions = tuple(
+                HumanDecision(**decision.model_dump(), order=order)
+                for order, decision in enumerate(
+                    mutation.decisions, start=self._next_decision_order
+                )
+            )
 
             previous_entities = self._entities
             previous_clock = self._clock
+            previous_decisions = self._decisions
             self._entities = candidate
             self._clock = candidate_clock
+            self._decisions += appended_decisions
             try:
                 self._event_sink.publish(sequenced)
             except Exception:
                 self._entities = previous_entities
                 self._clock = previous_clock
+                self._decisions = previous_decisions
                 raise
+            self._next_decision_order += len(appended_decisions)
             if sequenced:
                 self._last_seq = sequenced[-1].seq
             return mutation.value
@@ -108,12 +127,14 @@ class MutationCoordinator:
         *,
         simulation_time: VancouverDateTime,
         expected_epoch: Epoch | None = None,
+        clock_template: SimulationClock | None = None,
+        decisions: tuple[HumanDecision, ...] | None = None,
     ) -> CoordinatorSnapshot:
         StateEditor(candidate).freeze()
         with self._lock:
             self._check_epoch(expected_epoch)
             next_epoch: Epoch = self._epoch + 1
-            candidate_clock = self._clock.model_copy(
+            candidate_clock = (clock_template or self._clock).model_copy(
                 update={
                     "current_time": simulation_time,
                     "local_date": simulation_time.date(),
@@ -131,13 +152,17 @@ class MutationCoordinator:
             sequenced = self._sequence((reset,), next_epoch)
             previous_entities = self._entities
             previous_clock = self._clock
+            previous_decisions = self._decisions
             self._entities = candidate
             self._clock = candidate_clock
+            if decisions is not None:
+                self._decisions = decisions
             try:
                 self._event_sink.publish(sequenced)
             except Exception:
                 self._entities = previous_entities
                 self._clock = previous_clock
+                self._decisions = previous_decisions
                 raise
             self._epoch = next_epoch
             self._last_seq = sequenced[-1].seq
@@ -146,6 +171,7 @@ class MutationCoordinator:
                 last_seq=self._last_seq,
                 clock=self._clock,
                 entities=self._entities,
+                decisions=self._decisions,
             )
 
     def reset(self, simulation_time: VancouverDateTime) -> CoordinatorSnapshot:

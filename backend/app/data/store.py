@@ -27,11 +27,13 @@ class EventWindowStore:
 
     @property
     def status(self) -> IntegrationStatus:
-        return self._status
+        with self._lock:
+            return self._status
 
     @property
     def last_error(self) -> str | None:
-        return self._last_error
+        with self._lock:
+            return self._last_error
 
     def reader(self) -> EventReader:
         with self._lock:
@@ -60,6 +62,17 @@ class EventWindowStore:
             self._last_error = None
             self._status = IntegrationStatus.READY
             return candidate
+
+    def prepare_window(self, start: datetime, end: datetime) -> EventReader:
+        """Load and validate a candidate without replacing the active window."""
+        return EventReader(self._source.load_window(start, end))
+
+    def install_reader(self, reader: EventReader) -> EventReader:
+        with self._lock:
+            self._reader = reader
+            self._last_error = None
+            self._status = IntegrationStatus.READY
+            return reader
 
     def install(self, window: EventWindow) -> EventReader:
         """Atomically install a fully validated, backend-resolved event window."""

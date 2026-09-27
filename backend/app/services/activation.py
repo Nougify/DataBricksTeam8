@@ -36,11 +36,15 @@ class EventActivationService:
         self._clock = clock
         self._proposals = proposals
 
-    def start(self) -> None:
-        self._clock.set_seek_handler(self.rebuild_at)
+    def start(self, *, install_seek_handler: bool = True) -> None:
+        if install_seek_handler:
+            self._clock.set_seek_handler(self.rebuild_at)
         current_time = self._clock.clock.current_time
         self._activate_through(current_time)
         self._schedule_after(current_time)
+
+    def set_reader(self, reader: EventReader) -> None:
+        self._reader = reader
 
     def rebuild_at(self, at: VancouverDateTime) -> SimulationClock:
         self._coordinator.reset(at)
@@ -62,7 +66,7 @@ class EventActivationService:
             events: list[PendingEvent] = []
             registrations: list[BoundaryRegistration] = []
             for event in eligible:
-                outcome = self._activate(editor, clock, event)
+                outcome = self.activate_event(editor, clock, event)
                 events.extend(outcome.events)
                 registrations.extend(outcome.registrations)
             return Mutation(tuple(registrations), tuple(events))
@@ -77,26 +81,54 @@ class EventActivationService:
             )
 
     def _schedule_after(self, at: VancouverDateTime) -> None:
-        maximum = self._clock.clock.max_time.astimezone(UTC)
-        for event in self._reader.window.events:
-            if event.actionable_at > at:
-                self._clock.register_boundary(
-                    event.actionable_at,
-                    BoundaryPriority.EVENT_ACTIVATION,
-                    self._activation_handler(event),
-                    key=(EVENT_BOUNDARY_NAMESPACE, f"activate:{event.id}"),
+        for registration in self.registrations_after(at):
+            self._clock.register_boundary(
+                registration.at,
+                registration.priority,
+                registration.handler,
+                key=registration.key,
+            )
+
+    def registrations_after(
+        self,
+        at: VancouverDateTime,
+        *,
+        reader: EventReader | None = None,
+        maximum: VancouverDateTime | None = None,
+    ) -> tuple[BoundaryRegistration, ...]:
+        selected_reader = reader or self._reader
+        maximum_utc = (maximum or self._clock.clock.max_time).astimezone(UTC)
+        registrations: list[BoundaryRegistration] = []
+        for event in selected_reader.window.events:
+            if (
+                event.actionable_at > at
+                and event.actionable_at.astimezone(UTC) <= maximum_utc
+            ):
+                registrations.append(
+                    BoundaryRegistration(
+                        at=event.actionable_at,
+                        priority=BoundaryPriority.EVENT_ACTIVATION,
+                        handler=self._activation_handler(event),
+                        key=(EVENT_BOUNDARY_NAMESPACE, f"activate:{event.id}"),
+                    )
                 )
-            if at < event.event_time and event.event_time.astimezone(UTC) <= maximum:
-                self._clock.register_boundary(
-                    event.event_time,
-                    BoundaryPriority.EVENT_TARGET,
-                    self._target_handler,
-                    key=(EVENT_BOUNDARY_NAMESPACE, f"target:{event.id}"),
+            if (
+                at < event.event_time
+                and event.event_time.astimezone(UTC) <= maximum_utc
+            ):
+                registrations.append(
+                    BoundaryRegistration(
+                        at=event.event_time,
+                        priority=BoundaryPriority.EVENT_TARGET,
+                        handler=self._target_handler,
+                        key=(EVENT_BOUNDARY_NAMESPACE, f"target:{event.id}"),
+                    )
                 )
+        return tuple(registrations)
 
     def _activation_handler(self, event: DispatchEvent) -> BoundaryHandler:
         def activate(editor: StateEditor, clock: SimulationClock) -> BoundaryResult:
-            return self._activate(editor, clock, event)
+            return self.activate_event(editor, clock, event)
 
         return activate
 
@@ -105,7 +137,7 @@ class EventActivationService:
         del editor, clock
         return BoundaryResult()
 
-    def _activate(
+    def activate_event(
         self, editor: StateEditor, clock: SimulationClock, event: DispatchEvent
     ) -> BoundaryResult:
         if editor.dispatch_event(DispatchEventId(event.id)) is not None:

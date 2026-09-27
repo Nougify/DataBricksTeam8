@@ -6,6 +6,7 @@ from datetime import UTC, timedelta
 from math import ceil
 
 from app.config import Settings
+from app.domain.decisions import HumanDecisionAction, pending_decision
 from app.domain.events import EventType, PendingEvent
 from app.domain.models import (
     AdditionalTrip,
@@ -223,20 +224,26 @@ class ProposalService:
 
     def approve(self, trip_id: AdditionalTripId) -> ProposalDecision:
         return self._clock.transact_with_boundaries(
-            lambda editor, clock: self._approve(editor, clock, trip_id),
+            lambda editor, clock: self.approve_transition(
+                editor, clock, trip_id, record_decision=True
+            ),
             lambda decision: decision.registrations,
         )
 
     def reject(self, trip_id: AdditionalTripId) -> ProposalDecision:
         return self._coordinator.transact(
-            lambda editor, clock: self._reject(editor, clock, trip_id)
+            lambda editor, clock: self.reject_transition(
+                editor, clock, trip_id, record_decision=True
+            )
         )
 
-    def _approve(
+    def approve_transition(
         self,
         editor: StateEditor,
         clock: SimulationClock,
         trip_id: AdditionalTripId,
+        *,
+        record_decision: bool = False,
     ) -> Mutation[ProposalDecision]:
         trip = editor.trip(trip_id)
         if trip is None:
@@ -265,17 +272,31 @@ class ProposalService:
             cancelled, events = self._finish_proposal(
                 editor, clock, trip, AdditionalTripStatus.CANCELLED
             )
-            return Mutation(
+            mutation = Mutation(
                 ProposalDecision(cancelled, planned.reason),
                 events,
+            )
+            return self._record_decision(
+                mutation,
+                trip,
+                HumanDecisionAction.APPROVE,
+                clock,
+                record_decision,
             )
         if planned.estimated_return_time > clock.max_time:
             cancelled, events = self._finish_proposal(
                 editor, clock, trip, AdditionalTripStatus.CANCELLED
             )
-            return Mutation(
+            mutation = Mutation(
                 ProposalDecision(cancelled, "movement plan exceeds simulation bounds"),
                 events,
+            )
+            return self._record_decision(
+                mutation,
+                trip,
+                HumanDecisionAction.APPROVE,
+                clock,
+                record_decision,
             )
         approved = trip.model_copy(
             update={
@@ -299,7 +320,7 @@ class ProposalService:
         updated_event = self._aggregate_event(editor, event)
         editor.put_dispatch_event(updated_event)
         movement = self._movement.start_approved(editor, clock, approved)
-        return Mutation(
+        mutation = Mutation(
             ProposalDecision(movement.trip, registrations=movement.registrations),
             (
                 self._proposal_update(approved, clock),
@@ -308,12 +329,21 @@ class ProposalService:
             )
             + movement.events,
         )
+        return self._record_decision(
+            mutation,
+            trip,
+            HumanDecisionAction.APPROVE,
+            clock,
+            record_decision,
+        )
 
-    def _reject(
+    def reject_transition(
         self,
         editor: StateEditor,
         clock: SimulationClock,
         trip_id: AdditionalTripId,
+        *,
+        record_decision: bool = False,
     ) -> Mutation[ProposalDecision]:
         trip = editor.trip(trip_id)
         if trip is None:
@@ -325,7 +355,38 @@ class ProposalService:
         rejected, events = self._finish_proposal(
             editor, clock, trip, AdditionalTripStatus.REJECTED
         )
-        return Mutation(ProposalDecision(rejected), events)
+        mutation = Mutation(ProposalDecision(rejected), events)
+        return self._record_decision(
+            mutation,
+            trip,
+            HumanDecisionAction.REJECT,
+            clock,
+            record_decision,
+        )
+
+    @staticmethod
+    def _record_decision(
+        mutation: Mutation[ProposalDecision],
+        trip: AdditionalTrip,
+        action: HumanDecisionAction,
+        clock: SimulationClock,
+        enabled: bool,
+    ) -> Mutation[ProposalDecision]:
+        if not enabled:
+            return mutation
+        decision = pending_decision(
+            trip_id=trip.id,
+            dispatch_event_id=trip.dispatch_event_id,
+            bus_id=trip.bus_id,
+            action=action,
+            decided_at=clock.current_time,
+        )
+        return Mutation(
+            mutation.value,
+            mutation.events,
+            mutation.clock,
+            (decision,),
+        )
 
     def _expiry_registration(self, trip: AdditionalTrip) -> BoundaryRegistration:
         def expire(editor: StateEditor, clock: SimulationClock) -> BoundaryResult:

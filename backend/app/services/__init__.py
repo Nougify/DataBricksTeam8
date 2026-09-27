@@ -27,12 +27,18 @@ from app.services.proposals import (
     ProposalNotFoundError,
     ProposalService,
 )
+from app.services.replay import (
+    DeterministicSeekService,
+    ReplayConflictError,
+    ReplayDataError,
+)
 
 __all__ = [
     "BoundaryPriority",
     "BoundaryRegistration",
     "BoundaryResult",
     "CoordinatorSnapshot",
+    "DeterministicSeekService",
     "EpochConflictError",
     "EventActivationService",
     "EventSink",
@@ -47,6 +53,8 @@ __all__ = [
     "ProposalConflictError",
     "ProposalNotFoundError",
     "ProposalService",
+    "ReplayConflictError",
+    "ReplayDataError",
     "SimulationClockController",
     "SystemMonotonicTimeSource",
     "initial_clock",

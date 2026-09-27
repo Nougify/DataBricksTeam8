@@ -19,6 +19,7 @@ from app.domain.types import (
     DispatchEventId,
     HubId,
     RouteId,
+    VancouverDateTime,
 )
 from app.errors import install_error_handlers
 from app.fleet import load_fleet
@@ -39,6 +40,11 @@ from app.services.proposals import (
     ProposalNotFoundError,
     ProposalService,
 )
+from app.services.replay import (
+    DeterministicSeekService,
+    ReplayConflictError,
+    ReplayDataError,
+)
 from app.transit import (
     RecommendationMapper,
     build_fixture_transit_index,
@@ -56,7 +62,7 @@ class ClockSpeedRequest(BaseModel):
 
 
 class ClockSeekRequest(BaseModel):
-    time: datetime
+    time: VancouverDateTime
 
 
 class DispatchEventResponse(BaseModel):
@@ -104,11 +110,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 hubs=default_hub_catchments(),
             )
         )
-        data.install(
-            RecommendationMapper(transit, resolved_settings).resolve_window(
-                data.reader().window
-            )
-        )
+        mapper = RecommendationMapper(transit, resolved_settings)
+        data.install(mapper.resolve_window(data.reader().window))
         events = InMemoryEventSink()
         fleet = load_fleet(resolved_settings, transit)
         metadata = data.reader().window.metadata
@@ -123,7 +126,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 buses=fleet.buses,
             ),
         )
-        clock = SimulationClockController(coordinator, SystemMonotonicTimeSource())
+        clock = SimulationClockController(
+            coordinator,
+            SystemMonotonicTimeSource(),
+            seek_min_time=resolved_settings.simulation_min_time,
+            seek_max_time=resolved_settings.simulation_max_time,
+        )
         routing = build_routing_service(
             resolved_settings.routing_provider,
             resolved_settings.routing_speed_kph,
@@ -140,7 +148,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         activation = EventActivationService(
             data.reader(), coordinator, clock, proposals
         )
-        activation.start()
+        activation.start(install_seek_handler=False)
+        replay = DeterministicSeekService(
+            resolved_settings,
+            data,
+            mapper,
+            coordinator,
+            clock,
+            activation,
+            proposals,
+        )
+        replay.start()
         application.state.runtime = RuntimeOwner(
             settings=resolved_settings,
             data=data,
@@ -153,6 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             activation=activation,
             movement=movement,
             proposals=proposals,
+            replay=replay,
             events=events,
         )
         clock_task = asyncio.create_task(clock.run())
@@ -399,10 +418,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @application.post("/api/v1/clock/seek")
     async def seek_clock(request: ClockSeekRequest) -> dict[str, object]:
-        return cast(
-            dict[str, object],
-            application.state.runtime.clock.seek(request.time).model_dump(mode="json"),
-        )
+        try:
+            result = application.state.runtime.clock.seek(request.time)
+        except ReplayDataError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ReplayConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return cast(dict[str, object], result.model_dump(mode="json"))
 
     @application.post("/api/v1/additional-trips/{trip_id}/approve")
     async def approve_additional_trip(trip_id: str) -> dict[str, object]:
