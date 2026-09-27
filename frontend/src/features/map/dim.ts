@@ -15,7 +15,10 @@ export function useDimmed(): boolean {
 
 /** The hub of the previewed trip (its halo stays at full strength), or null outside preview. */
 export function usePreviewHubId(): string | null {
-  return useSim((s) => (s.previewTripId ? (s.trips[s.previewTripId]?.hub_id ?? null) : null));
+  return useSim((s) => {
+    const trip = s.previewTripId ? s.trips[s.previewTripId] : undefined;
+    return trip ? (s.events[trip.dispatch_event_id]?.hub_id ?? null) : null;
+  });
 }
 
 /** 1 normally; DIM_FACTOR while dimmed, unless this item is part of the preview set. */

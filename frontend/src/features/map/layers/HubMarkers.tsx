@@ -1,19 +1,21 @@
 "use client";
 
 // Layer 5, hub markers (spec §7.3, DESIGN §8.2): always-labelled, focusable HTML buttons, each with a halo whose
-// radius and opacity follow the last full hour's surge index. The halo ripple is the app's one ambient motion.
+// radius and opacity follow the last full hour's surge index (bundled forecast snapshot) and whose colour follows
+// the hub's current or next surge episode (dispatch events). The halo ripple is the app's one ambient motion.
 //
 // Halos render as their own markers *before* the buttons, so every label stays above every halo.
 import { memo, useMemo, type CSSProperties } from "react";
 import { Marker } from "react-map-gl/maplibre";
 import { useSim } from "@/lib/live/store";
-import type { HubStatus, Severity, Surge } from "@/lib/api/schemas";
+import type { Severity } from "@/config/scenario";
+import { currentOrNextEpisode, episodePhase, useEpisodes, type SurgeEpisode } from "@/lib/live/episodes";
 import { fmtIndex, fmtTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { usePageVisible, usePreviewHubId } from "../dim";
 import {
   haloFor,
-  liveSurgeSeverity,
+  useLastHourIndex,
   useMapHubs,
   useSeverityBands,
   type Halo,
@@ -47,18 +49,14 @@ const HALO_MARKER_STYLE: CSSProperties = { pointerEvents: "none", zIndex: 1 };
 const BUTTON_MARKER_STYLE: CSSProperties = { zIndex: 2 };
 const SELECTED_MARKER_STYLE: CSSProperties = { zIndex: 3 };
 
-function hubLabel(hub: MapHub, status: HubStatus | undefined, surges: Record<string, Surge>): string {
+function hubLabel(hub: MapHub, index: number | null, episode: SurgeEpisode | null, nowMs: number): string {
   const parts = [hub.name];
-  const index = status?.last_full_hour.surge_index;
-  parts.push(index != null ? `surge index ${fmtIndex(index)} in the last full hour` : "surge index not available yet");
-  const next = status?.next_surge;
-  const severity = liveSurgeSeverity(status, surges);
-  if (next && severity) {
-    const active = surges[next.surge_id]?.phase === "ACTIVE";
+  parts.push(index != null ? `surge index ${fmtIndex(index)} in the last full hour` : "surge index not available for this hour");
+  if (episode?.severity) {
     parts.push(
-      active
-        ? `${SEVERITY_WORD[severity]} surge now`
-        : `${SEVERITY_WORD[severity]} surge forecast from ${fmtTime(next.window_start)}`,
+      episodePhase(episode, nowMs) === "ACTIVE"
+        ? `${SEVERITY_WORD[episode.severity]} surge now`
+        : `${SEVERITY_WORD[episode.severity]} surge forecast from ${fmtTime(episode.startMs)}`,
     );
   }
   return parts.join(", ");
@@ -129,8 +127,9 @@ const HubButton = memo(function HubButton({
 
 export function HubMarkers({ dimmed }: MapLayerProps) {
   const hubs = useMapHubs();
-  const statuses = useSim((s) => s.hubs);
-  const surges = useSim((s) => s.surges);
+  const lastHour = useLastHourIndex();
+  const episodes = useEpisodes();
+  const nowIso = useSim((s) => s.clock?.current_time ?? null);
   const selectedHubId = useSim((s) => s.selectedHubId);
   const selectHub = useSim((s) => s.selectHub);
   const previewHubId = usePreviewHubId();
@@ -140,14 +139,16 @@ export function HubMarkers({ dimmed }: MapLayerProps) {
   const rows = useMemo(
     () =>
       hubs.map((hub) => {
-        const status = statuses[hub.id];
+        const nowMs = nowIso ? Date.parse(nowIso) : 0;
+        const index = lastHour[hub.id]?.index ?? null;
+        const episode = nowIso ? currentOrNextEpisode(episodes, hub.id, nowMs) : null;
         return {
           hub,
-          halo: haloFor(status?.last_full_hour.surge_index, liveSurgeSeverity(status, surges), bands),
-          label: hubLabel(hub, status, surges),
+          halo: haloFor(index, episode?.severity ?? null, bands),
+          label: hubLabel(hub, index, episode, nowMs),
         };
       }),
-    [hubs, statuses, surges, bands],
+    [hubs, lastHour, episodes, nowIso, bands],
   );
 
   const onSelect = useMemo(() => (id: string) => selectHub(id, "now"), [selectHub]);

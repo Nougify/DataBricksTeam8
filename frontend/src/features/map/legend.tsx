@@ -39,7 +39,7 @@ export function MapLegend() {
       >
         {modules.map(({ id, Legend }) =>
           Legend ? (
-            <ul key={id} className="space-y-1.5 py-2">
+            <ul key={id} className="space-y-1.5 py-2 empty:hidden">
               <Legend />
             </ul>
           ) : null,

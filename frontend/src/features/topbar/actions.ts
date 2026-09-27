@@ -4,8 +4,8 @@
 // so failures are reported here in one consistent form: "Couldn't <action>." plus the server's message.
 import { useState } from "react";
 import { toast } from "sonner";
-import { useMeta, usePause, useSeek, useSetSpeed } from "@/lib/api/hooks";
-import type { Preset } from "@/lib/api/schemas";
+import { DEFAULT_START_TIME, type Preset } from "@/config/scenario";
+import { usePause, useSeek, useSetSpeed } from "@/lib/api/hooks";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { useSim, type HubTab } from "@/lib/live/store";
 import { ENV } from "@/config/env";
@@ -53,17 +53,20 @@ export function usePresetJump() {
 }
 
 /**
- * Reset demo (spec §6): pause, seek to `/meta.default_start_time`, set speed 60, clear the selection and
- * close any preview. Pausing first means the clock can't drift past the start time while the seek runs.
+ * Reset demo (spec §6): pause, seek to DEFAULT_START_TIME (clamped into the clock's bounds, since a backend may
+ * serve a narrower window), set speed 60, clear the selection and close any preview. Pausing first means the
+ * clock can't drift past the start time while the seek runs.
  */
 export function useResetDemo() {
-  const meta = useMeta();
-  const hasClock = useSim((s) => s.clock !== null);
+  // Select primitives: a selector returning a fresh array would re-render forever.
+  const minTime = useSim((s) => s.clock?.min_time ?? null);
+  const maxTime = useSim((s) => s.clock?.max_time ?? null);
+  const hasClock = minTime !== null && maxTime !== null;
   const pause = usePause();
   const seek = useSeek();
   const setSpeed = useSetSpeed();
   const [pending, setPending] = useState(false);
-  const target = meta.data?.default_start_time ?? null;
+  const target = hasClock ? clampTime(DEFAULT_START_TIME, minTime, maxTime) : null;
 
   const reset = async () => {
     if (!target || pending) return;
@@ -88,6 +91,13 @@ export function useResetDemo() {
   };
 
   return { reset: () => void reset(), pending, disabled: !target || !hasClock || pending };
+}
+
+function clampTime(time: string, min: string, max: string): string {
+  const t = Date.parse(time);
+  if (t < Date.parse(min)) return min;
+  if (t > Date.parse(max)) return max;
+  return time;
 }
 
 /** Dev only, mock mode only: closes the fake WebSocket so reconnect handling can be exercised (spec §12.3). */

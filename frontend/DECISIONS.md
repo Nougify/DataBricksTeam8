@@ -1,7 +1,109 @@
 # Decisions log
 
-Answers from the frontend owner (2026-09-26) that fill gaps or resolve conflicts in `../spec.md` and `../message.txt`.
-Where this file and the spec disagree, **this file wins**. Where it's silent, the spec wins; `message.txt` wins on field names and shapes.
+Answers from the frontend owner that fill gaps or resolve conflicts in `../spec.md` and `../backendspec.md`.
+Where this file and the spec disagree, **this file wins**. Where it's silent, the spec wins; `backendspec.md` (v3) wins on field names and shapes.
+The **v3 section below supersedes** anything later in this file that assumes the v2 contract (`message.txt`, now deleted): Surge objects, `/hubs`, forecast/origins/timeline/backtest endpoints, `PUT /simulation/*`, and the scripted-scenario numbers.
+
+## v3 contract and Milestone 2 (2026-09-26/27)
+
+### Process
+
+- Work in `frontend/` (`web/` was renamed on main). **No subagents** this time. Phases: Codex fixes + `web/` cleanup → v3 migration → M2 UI. Post an update after each phase, run checks + screenshots, **don't commit**.
+- Also: silence the ESLint warning from the generated `public/mockServiceWorker.js`, fix the Atkinson Hyperlegible Next font-override build warning, point `ARCHITECTURE.md` at `backendspec.md` v3, and update `../handoff.md` at the end.
+- Codex follow-ups: make `useThemeChoice` hydration-safe properly (no `getServerSnapshot` warning, no mismatch); strip the garbled UTF-16 "Implementation Status" block from the end of `../spec.md`.
+- Old `web/`: copy `web/.env.local` into `frontend/` if frontend has none, move `web/screenshots` into `frontend/screenshots`, then delete `web/`.
+
+### Contract (zod)
+
+- Fields `backendspec.md` lists are **required and strict**. Extra fields the real backend sends are **optional/nullable**, and the UI uses them when present: `Clock.local_date`, `hour`, `approval_mode`, `auto_pause_on_proposal`; `Bus.heading_deg`, `source`; `AdditionalTrip.source_route`, `destination`, `selected_candidate`, `movement_plan` (deadhead/service/return paths).
+- Endpoints and WS as in v3 (and the real backend): `POST /clock/pause|resume|speed|seek` (bodies `{speed}` / `{time}`), `GET /ws` (first frame = `/state` snapshot, then `{type, seq, epoch, simulation_time, data}` envelopes with `clock.updated`, `dispatch_event.updated`, `proposal.created`, `proposal.updated`, `trip.updated`, `bus.updated`, `system.reset`, `system.error`). Errors are `{error:{code,message}}`.
+- **Auto-pause** has no API. The top bar shows `Clock.auto_pause_on_proposal` as a **read-only indicator** with a tooltip saying it's set on the backend; hidden if the field is absent.
+
+### Where data comes from ("hybrid")
+
+- **Live state** (clock, dispatch events, proposals/trips, buses, routes) comes from the v3 backend, or from MockSim in mock mode.
+- **Analytics** come from **static JSON bundled in the frontend** (used in both mock and real mode), each with a visible source:
+  - Hubs (id, name, lat/lon, catchment) and **presets** live in frontend config.
+  - **Hourly actual / forecast / typical** come from `rgersxdatabricks_hackathon.model.surge_forecast_hourly` (split `history`, full range, both targets). Mapping: actual = `actual`, forecast = `predicted`, typical = `normal`, surge line = `normal × 1.25`. Hours it doesn't cover (before 2025-11-29) are synthesized and labelled "estimate".
+  - **Scorecard**: `model.surge_model_metrics`. Per-hub precision/recall/F1 at **60 min lead** in the strip and badges; 30/60/120 min in About. There's no "median lead time"; the copy says "1 h ahead".
+  - Origins, daily timeline, exam/holiday events, validation: the existing `src/mocks/data` snapshots, which move to a shared analytics location.
+  - Bundle the **full range**, compacted (columnar JSON, lazy-loaded per hub or month).
+- The **dispatch-event feed** for mocks and presets is `model.surge_recommendations_backtest` (the full range, 3 hubs), snapshotted and mapped to v3 names: `hub_id`→`surge_location`, `route_key`→`route`, `destination_share_pct`→`destination_share`. It's queried read-only with `--profile DEFAULT`.
+- **Timestamps** in those tables are **Vancouver wall time stored as UTC**. Read `2025-12-06T13:00Z` as 13:00 America/Vancouver. *Open item for the data owner.*
+
+### Surges → dispatch events
+
+- There's no Surge object. **DispatchEvents are the surges**: surge index = `surge_ratio` (predicted/normal); the window is anchored on `event_time`; non-hub events use `DispatchEvent.location`.
+- **Episodes (display only):** consecutive visible events for the same hub, with gaps of 30 min or less, are grouped into one "surge episode" with a window and peak index. Halos, the overview's "next surge", map surge markers and the timeline use episodes. Individual events and proposals are listed under their episode. Data is never merged.
+- Vocabulary: always **pings**. `predicted_people` = "forecast pings", `normal_people` = "typical pings", `surge_ratio` = "surge index".
+
+### Now chart
+
+- Real forecast (above). **No 80% band**; the legend/tooltip says no interval is published.
+- A small **arrivals / departures toggle** (default arrivals) drives both the chart and the hub KPIs.
+- Replace the 3/6/12/24 h horizon selector with a **window selector**: next 6 / 12 / 24 h plus matching history. No per-horizon vintage claims.
+- **Don't rescale** the forecast to match events. Overlay visible dispatch events as markers (at `event_time`, value = forecast pings, tooltip with surge index and lead time), each with its own source.
+
+### Origins
+
+- "Where the surge crowd is headed" = the recommendations of the hub's visible dispatch event(s): destination, `destination_share` %, and the recommended route bullet. Source: the Databricks dispatch event.
+- Feed destinations ("NewWestminster") match `dim_origin` names case- and space-insensitively. Display the `dim_origin` spelling. Unmatched names are shown as text only (no arc).
+
+### Timeline
+
+- Keep the bundled retrospective surge days and exam/holiday bands ("Retrospective index"). Also mark dispatch events that have **already become actionable** up to the current sim time. Never show future events.
+
+### MockSim (v3)
+
+- **Mirror the backend rules:** events activate at `actionable_at` (proactive when `available_at` is set). Sort recommendations by priority and take the first whose route exists in the mock routes. Bus count = `ceil(extra_bus_trips_est)`, capped by the per-event max (3) and free buses; zero creates no proposal. Approval timeout is 30 sim-min; auto-pause on proposal is on. Reject or expiry releases the bus. Approval mode is MANUAL.
+- **The mock fleet mirrors `backend/config/fleet.json`** (currently 3 × 50-seat buses: 2 at UBC, 1 at Waterfront, all homed at UBC). Running out of buses shows up honestly as `NO_BUS_AVAILABLE`.
+- Mock routes include the real GTFS routes named in the bundled feed rows, so recommendations resolve.
+- Seek is deterministic, as before.
+
+### Presets and the demo story
+
+- Keep the preset **days** (UBC Sat 2025-12-06, Park Royal Fri 2025-12-26, Waterfront Sat 2026-07-25, plus the normal weekday and Saturday late night), but **use real data and numbers**. For example, UBC Dec 6 peaks at 1.99× at 13:00, the lead is 60 min, and the top recommendation is route 49 → Surrey.
+- Preset time = **30 min before the first `available_at` of that hub's highest-peak episode** that day. The exact times are recorded below once computed.
+
+### 2a answers (2026-09-27)
+
+- **Recommendation eligibility (overrides "first whose route exists" above):** MockSim mirrors the backend. It takes the first recommendation, by priority, that is a **bus-mode route serving the hub**. Rail, SeaBus, WCE and routes that don't call at the hub are skipped. If none qualifies, the event becomes `NO_MATCHING_ROUTE`. The destination stop is the route-shape point nearest the destination's `dim_origin` centroid, after the hub point.
+- **409s mirror the backend:** `{error:{code:"HTTP_ERROR", message}}` with the backend's messages ("proposal has expired", "trip is not proposed", …) and no `trip`. The client maps known messages to the spec §9.3 copy and refetches the trip.
+- **Feed routes that don't call at a hub** (19, 240, 246, 2, 23, 6, 241, 247, N9) are snapshotted read-only from GTFS bronze, using the routes.json method, with `serves_hub_ids: []`. They're for display only and are never dispatchable.
+- **Real-backend smoke test:** run against the compose backend's fixture window (2026-07-10 09:00–15:00). Don't change `backend/` or its env.
+
+### Preset times (computed 2026-09-27 from the bundled feed)
+
+Episodes are consecutive events for a hub with gaps of 30 min or less. The highest-peak episode's first `available_at`, minus 30 min:
+
+| Preset | Hub | Highest-peak episode (event_time) | Peak surge index | First `available_at` | Preset time |
+|---|---|---|---|---|---|
+| UBC exam weekend | ubc | Sat 2025-12-06 09:00–23:30 (30 events) | 1.99× at 13:00 | 08:00 | **2025-12-06T07:30:00-08:00** |
+| Park Royal Boxing Day | park-royal | Fri 2025-12-26 12:00–16:00 (9 events) | 1.44× at 14:30 | 11:00 | **2025-12-26T10:30:00-08:00** |
+| Waterfront summer Saturday | waterfront | Sat 2026-07-25 09:00–23:30 (30 events) | 1.79× at 10:00 | 08:00 | **2026-07-25T07:30:00-07:00** |
+| Normal weekday | — | no events on 2026-02-11 | — | — | 2026-02-11T13:00:00-08:00 (unchanged) |
+| Saturday late night | waterfront | — | — | — | 2026-02-14T22:00:00-08:00 (unchanged). Note: Waterfront has events from 21:00 to 23:30 that night (up to 2.27×), so this preset isn't quiet. |
+
+- Every feed destination matches a `dim_origin` name exactly, and every feed route key matches a bundled route `line_key` ("Expo Line", "Canada Line", "SeaBus", "49", …). Matching is still case- and space-insensitive.
+- Top recommendation: UBC is 49 → Surrey; Park Royal is R2 → North Vancouver; Waterfront is Expo Line → Surrey (skipped as rail, so a lower-priority bus recommendation is used).
+
+### 2b answers (2026-09-27)
+
+- **Origins basis:** the bundled data has no per-hour *actual* origin mix, so the toggle is **Typical hour** (default: origin_hourly for the sim's day type and last full hour, "Typical Saturday, 12:00–13:00") vs **Whole dataset** (origins.json). There's no "Actual" option. URL `basis` is `typical` (default, omitted) or `all`.
+- **Approval queue (overview):** Approve and Reject work now (existing mutation hooks, "Trip approved" / "Proposal rejected" toasts, 409 copy). Preview arrives with map preview mode in M3, so there's no Preview button yet.
+- **Timeline dispatch markers:** come from `src/data/feed_days.json`, a compact per-hub, per-day summary of the bundled feed (first `actionable_at`, peak surge index), derived by `scripts/derive-feed-days.mjs`. Only days whose first `actionable_at` is at or before the sim time are shown. It's the same in mock and real mode.
+- **Defaults chosen without asking** (flag if wrong):
+  - Hours before the forecast snapshot (before 2025-11-29) show no forecast: the Now chart shows an empty state with "Jump to Nov 29 2025".
+  - The current hour has no sub-hour actual in the snapshot, so the chart shows actuals through the last full hour. There's no "so far" point.
+  - Future actuals in the snapshot are never drawn: actual stops at the last full hour.
+  - Overview hub cards use arrivals (like the halos). The Now tab's arrivals/departures toggle drives its own KPIs and chart and lives in the store, not the URL.
+  - Exam and holiday events are restored from the v2 mock as `src/data/events.ts` (UBC Dec 2025 and Apr 2026 exam periods, the 10 BC holidays), each with its source link. They feed driver chips and timeline bands.
+  - Tabs other than Now and Origins show a short "arrives in a later milestone" note.
+
+### Mock-only deviations from the backend
+
+- **Retention:** the backend keeps every event since the simulation start in `/state`. MockSim keeps events whose `actionable_at` falls in the last **24 sim-hours**, plus their trips, so `/state` stays small. A seek replays from T − 24 h with the initial fleet.
+- **Service leg:** the snapshot has no GTFS stop-time offsets, so a mock service leg runs at **20 km/h** along the representative shape. Deadhead and return legs are straight lines at 30 km/h, like the backend's `straight_line` provider.
 
 ## Process
 

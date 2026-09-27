@@ -4,6 +4,7 @@
 // - at most once every 2 s of wall time at 900x and above;
 // - at 3600x, only for queries whose view is `visible` (others catch up on pause or when shown).
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { clockLocal } from "./clock";
 import { useSim, type LiveState } from "./store";
 
 export interface SimHourKey {
@@ -22,7 +23,8 @@ const THROTTLE_MS = 2000;
 
 function targetKey(s: LiveState): SimHourKey {
   if (!s.clock) return EMPTY_HOUR_KEY;
-  return { localDate: s.clock.local_date, hour: s.clock.hour, epoch: s.epoch, at: s.clock.current_time };
+  const { local_date, hour } = clockLocal(s.clock);
+  return { localDate: local_date, hour, epoch: s.epoch, at: s.clock.current_time };
 }
 
 const sameKey = (a: SimHourKey, b: SimHourKey) =>

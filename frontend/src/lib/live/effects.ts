@@ -1,9 +1,11 @@
-// Turns reducer effects into toasts and aria-live announcements (spec §11.3).
+// Turns reducer effects into toasts and aria-live announcements (spec §11.3, v3).
 // Toast ids are stable per kind + entity, so repeats update in place instead of stacking, and at most
-// three toasts are on screen at once (the oldest is dismissed first).
+// three toasts are on screen at once (the oldest is dismissed first). New dispatch events are grouped per hub:
+// at high speed a hub can raise one every 30 sim-minutes, and each replaces the hub's previous toast.
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
-import type { AdditionalTrip, Hub, Surge } from "@/lib/api/schemas";
+import { hubName } from "@/config/hubs";
+import type { AdditionalTrip, DispatchEvent, RouteListItem } from "@/lib/api/schemas";
 import { qk } from "@/lib/api/queryKeys";
 import { fmtIndex, fmtTime } from "@/lib/format";
 import type { SimEffect } from "./reducer";
@@ -16,38 +18,41 @@ const PROPOSAL_TOAST_MS = 12_000;
 
 export const PAUSED_FOR_REVIEW = "Simulation paused for review.";
 
-const FALLBACK_HUB_NAMES: Record<string, string> = {
-  ubc: "UBC",
-  waterfront: "Waterfront Station",
-  "park-royal": "Park Royal",
-};
-
 export interface EffectContext {
-  /** Used to read hub display names from the /hubs cache. */
+  /** Used to read route names from the /routes cache. */
   queryClient?: QueryClient;
   /** Wall ms; injectable for tests. */
   now?: number;
 }
 
-export function hubDisplayName(hubId: string, queryClient?: QueryClient): string {
-  const hubs = queryClient?.getQueryData<Hub[]>(qk.hubs());
-  return hubs?.find((h) => h.id === hubId)?.name ?? FALLBACK_HUB_NAMES[hubId] ?? hubId;
+/** Route short name for a trip: the /routes cache, then the feed's route key, then the raw id. */
+export function tripRouteLabel(trip: AdditionalTrip, queryClient?: QueryClient): string {
+  for (const hub of [null, true, false] as const) {
+    const cached =
+      hub === null
+        ? queryClient?.getQueryData<RouteListItem[]>(qk.routes(null, false))
+        : queryClient?.getQueryData<RouteListItem[]>(qk.routes(null, hub));
+    const route = cached?.find((r) => r.route_id === trip.route_id);
+    if (route) return route.short_name;
+  }
+  return trip.source_route ?? trip.route_id;
 }
 
-/** "bus from route 25 → 99 at UBC" (or "bus from depot → R2 at Park Royal"). */
-export function describeProposal(trip: AdditionalTrip, hubName: string | null): string {
-  const from = trip.donor_route ? `bus from route ${trip.donor_route.short_name}` : "bus from depot";
-  return `${from} → ${trip.route.short_name}${hubName ? ` at ${hubName}` : ""}`;
+/** The hub a trip serves, from its dispatch event. */
+export function tripHubId(trip: AdditionalTrip): string | null {
+  return useSim.getState().events[trip.dispatch_event_id]?.hub_id ?? null;
 }
 
-/** "From depot: North Vancouver Transit Centre" when the bus comes from a depot, else null. */
-export function depotLine(trip: AdditionalTrip, depotName: string | null | undefined): string | null {
-  if (trip.donor_route) return null;
-  return `From depot: ${depotName ?? "unknown depot"}`;
+/** "bus-01 → extra 49 trip at UBC". */
+export function describeProposal(trip: AdditionalTrip, routeLabel: string, hubLabel: string | null): string {
+  return `${trip.bus_id} → extra ${routeLabel} trip${hubLabel ? ` at ${hubLabel}` : ""}`;
 }
 
-export function surgeToastText(surge: Surge, locationName: string): string {
-  return `Surge forecast at ${locationName} ${fmtTime(surge.predicted_window.start)}, ${fmtIndex(surge.magnitude.surge_index)}`;
+/** "Surge forecast at UBC 13:00, 1.99×". */
+export function eventToastText(event: DispatchEvent): string {
+  const where = event.hub_id ? hubName(event.hub_id) : event.source_location;
+  const index = event.surge_ratio === null ? "" : `, ${fmtIndex(event.surge_ratio)}`;
+  return `Surge forecast at ${where} ${fmtTime(event.event_time)}${index}`;
 }
 
 // ---------- toast bookkeeping ----------
@@ -79,23 +84,19 @@ function dismiss(id: string) {
   toast.dismiss(id);
 }
 
-function hubName(hubId: string | null, ctx: EffectContext): string | null {
-  return hubId ? hubDisplayName(hubId, ctx.queryClient) : null;
-}
-
 function review(trip: AdditionalTrip) {
   const s = useSim.getState();
-  if (trip.hub_id) s.selectHub(trip.hub_id, "dispatch");
+  const hubId = tripHubId(trip);
+  if (hubId) s.selectHub(hubId, "dispatch");
   else s.setTab("dispatch");
   useSim.getState().startPreview(trip.id);
 }
 
 function showProposal(trip: AdditionalTrip, paused: boolean, ctx: EffectContext) {
-  const title = `New proposal: ${describeProposal(trip, hubName(trip.hub_id, ctx))}`;
-  const depot = depotLine(trip, useSim.getState().buses[trip.bus.id]?.source.depot_name);
-  const description = [depot && `${depot}.`, paused ? PAUSED_FOR_REVIEW : null].filter(Boolean).join(" ");
+  const hubId = tripHubId(trip);
+  const title = `New proposal: ${describeProposal(trip, tripRouteLabel(trip, ctx.queryClient), hubId ? hubName(hubId) : null)}`;
   show(`proposal:${trip.id}`, title, {
-    description: description || undefined,
+    description: paused ? PAUSED_FOR_REVIEW : undefined,
     duration: PROPOSAL_TOAST_MS,
     action: { label: "Review", onClick: () => review(trip) },
   });
@@ -130,23 +131,24 @@ export function handleSimEffects(effects: readonly SimEffect[], ctx: EffectConte
         }
         break;
       }
-      case "surge-new": {
-        const { surge } = effect;
-        const where = surge.hub_id ? hubDisplayName(surge.hub_id, ctx.queryClient) : surge.location_name;
-        show(`surge:${surge.id}`, surgeToastText(surge, where));
+      case "event-new": {
+        const { event } = effect;
+        show(`event:${event.hub_id ?? event.source_location}`, eventToastText(event));
         break;
       }
       case "trip-expired": {
         const { trip } = effect;
         dismiss(`proposal:${trip.id}`);
-        const description = describeProposal(trip, hubName(trip.hub_id, ctx));
-        show(`expired:${trip.id}`, "Proposal expired", {
-          description: description.charAt(0).toUpperCase() + description.slice(1),
-        });
+        const hubId = tripHubId(trip);
+        const text = describeProposal(trip, tripRouteLabel(trip, ctx.queryClient), hubId ? hubName(hubId) : null);
+        show(`expired:${trip.id}`, "Proposal expired", { description: text.charAt(0).toUpperCase() + text.slice(1) });
         break;
       }
+      case "system-error":
+        toast.error("The simulation reported an error.", { id: "system-error", description: effect.message });
+        break;
       case "reset":
-        // A seek replaces every trip and surge; toasts about the old state would point at nothing.
+        // A seek replaces every event and trip; toasts about the old state would point at nothing.
         for (const id of [...onScreen]) dismiss(id);
         recentProposal = null;
         recentAutoPauseAt = Number.NEGATIVE_INFINITY;

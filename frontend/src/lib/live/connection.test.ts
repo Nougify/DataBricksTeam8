@@ -3,10 +3,10 @@ import { QueryClient } from "@tanstack/react-query";
 import type { StateResponse } from "@/lib/api/schemas";
 import { getState } from "@/lib/api/endpoints";
 import { handleSimEffects } from "./effects";
-import { backoffDelay, startLiveConnection, type LiveConnection } from "./connection";
+import { BOOTSTRAP_TIMEOUT_MS, backoffDelay, startLiveConnection, type LiveConnection } from "./connection";
 import { useSim } from "./store";
 import type { SimTransport, TransportHandlers } from "./transport";
-import { BUS, CLOCK, HUB, SURGE, makeState, msg } from "./__tests__/fixtures";
+import { BUS, CLOCK, EVENT, makeState, msg } from "./__tests__/fixtures";
 
 vi.mock("@/lib/api/endpoints", () => ({ getState: vi.fn() }));
 vi.mock("./effects", () => ({ handleSimEffects: vi.fn() }));
@@ -45,6 +45,7 @@ function deferred<T>() {
 }
 
 const flush = () => vi.advanceTimersByTimeAsync(0);
+const bus = (status: typeof BUS.status) => ({ ...BUS, status });
 
 describe("startLiveConnection", () => {
   let transports: FakeTransport[];
@@ -80,28 +81,43 @@ describe("startLiveConnection", () => {
     vi.useRealTimers();
   });
 
-  it("buffers during the /state fetch, then replays only this epoch's messages after last_seq", async () => {
+  it("applies the WebSocket's bootstrap snapshot, then goes live", () => {
+    start();
+    expect(useSim.getState().connection).toBe("connecting");
+    const t = transports[0];
+    t.open();
+    t.send(makeState());
+
+    const s = useSim.getState();
+    expect(s.connection).toBe("live");
+    expect(s.epoch).toBe(3);
+    expect(s.lastSeq).toBe(1042);
+    expect(s.events[EVENT.id]).toEqual(EVENT);
+    expect(getStateMock).not.toHaveBeenCalled();
+
+    t.send(msg("bus.updated", bus("DEADHEADING"), 1043));
+    expect(useSim.getState().buses[BUS.id].status).toBe("DEADHEADING");
+    t.send({ type: "surge.detected", seq: 1044, epoch: 3, simulation_time: CLOCK.current_time, data: {} }); // unknown: ignored
+    expect(useSim.getState().lastSeq).toBe(1043);
+  });
+
+  it("without a bootstrap, fetches /state after the timeout and replays only this epoch's messages after last_seq", async () => {
     const snapshot = deferred<StateResponse>();
     getStateMock.mockReturnValueOnce(snapshot.promise);
     start();
-
-    expect(useSim.getState().connection).toBe("connecting");
-    expect(transports).toHaveLength(1);
-    expect(getStateMock).not.toHaveBeenCalled();
-
     const t = transports[0];
     t.open();
+    await vi.advanceTimersByTimeAsync(BOOTSTRAP_TIMEOUT_MS - 1);
+    expect(getStateMock).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
     expect(getStateMock).toHaveBeenCalledTimes(1);
 
     // While /state is in flight (it will say epoch 3, last_seq 1042):
-    t.send(msg("hub.demand_updated", { ...HUB, active_trip_count: 7 }, 1100, 2)); // older epoch: dropped
-    t.send(msg("bus.updated", { ...BUS, status: "IN_SERVICE" }, 1040)); // already in the snapshot: dropped
-    t.send(msg("bus.updated", { ...BUS, status: "RETURNING" }, 1042)); // == last_seq: dropped
-    t.send(msg("hub.demand_updated", { ...HUB, active_trip_count: 5 }, 1043)); // replayed
-    t.send(msg("surge.updated", { ...SURGE, id: "surge-new" }, 1044)); // replayed
-    t.send({ type: "surge.detected", simulation_time: "2025-12-06T10:00:00-08:00", data: {} }); // retired: ignored
-
-    // Nothing applied yet.
+    t.send(msg("bus.updated", bus("WAITING"), 1100, 2)); // older epoch: dropped
+    t.send(msg("bus.updated", bus("IN_SERVICE"), 1040)); // already in the snapshot: dropped
+    t.send(msg("bus.updated", bus("RETURNING"), 1042)); // == last_seq: dropped
+    t.send(msg("dispatch_event.updated", { ...EVENT, id: "event-new" }, 1043)); // replayed
+    t.send(msg("bus.updated", bus("DEADHEADING"), 1044)); // replayed
     expect(useSim.getState().clock).toBeNull();
 
     snapshot.resolve(makeState());
@@ -109,23 +125,27 @@ describe("startLiveConnection", () => {
 
     const s = useSim.getState();
     expect(s.connection).toBe("live");
-    expect(s.epoch).toBe(3);
     expect(s.lastSeq).toBe(1044);
-    expect(s.hubs.ubc.active_trip_count).toBe(5);
-    expect(s.buses[BUS.id].status).toBe(BUS.status);
-    expect(s.surges["surge-new"]).toBeDefined();
-    expect(handleSimEffects).toHaveBeenCalledWith([expect.objectContaining({ kind: "surge-new" })], { queryClient });
+    expect(s.buses[BUS.id].status).toBe("DEADHEADING");
+    expect(s.events["event-new"]).toBeDefined();
+    expect(handleSimEffects).toHaveBeenCalledWith([expect.objectContaining({ kind: "event-new" })], { queryClient });
+  });
 
-    // Live from here on: applied immediately.
-    t.send(msg("hub.demand_updated", { ...HUB, active_trip_count: 6 }, 1045));
-    expect(useSim.getState().hubs.ubc.active_trip_count).toBe(6);
+  it("ignores a late bootstrap that is older than the /state already applied", async () => {
+    getStateMock.mockResolvedValueOnce(makeState({ last_seq: 1050 }));
+    start();
+    const t = transports[0];
+    t.open();
+    await vi.advanceTimersByTimeAsync(BOOTSTRAP_TIMEOUT_MS);
+    expect(useSim.getState().lastSeq).toBe(1050);
+    t.send(makeState({ last_seq: 1042 }));
+    expect(useSim.getState().lastSeq).toBe(1050);
   });
 
   it("repeats the whole startup after a reconnect, with backoff", async () => {
-    getStateMock.mockResolvedValueOnce(makeState());
     start();
     transports[0].open();
-    await flush();
+    transports[0].send(makeState());
     expect(useSim.getState().connection).toBe("live");
 
     transports[0].drop();
@@ -138,25 +158,18 @@ describe("startLiveConnection", () => {
     await vi.advanceTimersByTimeAsync(200);
     expect(transports).toHaveLength(2);
 
+    // The sim moved on while we were away; the new bootstrap replaces everything.
     const second = transports[1];
-    const snapshot = deferred<StateResponse>();
-    getStateMock.mockReturnValueOnce(snapshot.promise);
     second.open();
-    expect(getStateMock).toHaveBeenCalledTimes(2);
-
-    // The sim moved on while we were away; buffered messages replay on top of the new snapshot.
-    second.send(msg("hub.demand_updated", { ...HUB, pending_proposal_count: 3 }, 2001, 5));
-    snapshot.resolve(
-      makeState({ epoch: 5, last_seq: 2000, simulation: { ...CLOCK, epoch: 5, current_time: "2025-12-06T12:00:00-08:00", hour: 12 } }),
-    );
-    await flush();
+    second.send(makeState({ epoch: 5, last_seq: 2000, simulation: { ...CLOCK, epoch: 5, current_time: "2025-12-06T12:00:00-08:00", hour: 12 } }));
+    second.send(msg("bus.updated", bus("IN_SERVICE"), 2001, 5));
 
     const s = useSim.getState();
     expect(s.connection).toBe("live");
     expect(s.epoch).toBe(5);
     expect(s.lastSeq).toBe(2001);
     expect(s.clock?.hour).toBe(12);
-    expect(s.hubs.ubc.pending_proposal_count).toBe(3);
+    expect(s.buses[BUS.id].status).toBe("IN_SERVICE");
   });
 
   it("goes offline after repeated failures and keeps retrying", async () => {
@@ -174,17 +187,16 @@ describe("startLiveConnection", () => {
     getStateMock.mockRejectedValueOnce(new Error("boom"));
     start();
     transports[0].open();
-    await flush();
+    await vi.advanceTimersByTimeAsync(BOOTSTRAP_TIMEOUT_MS);
     expect(transports[0].closed).toBe(true);
     expect(useSim.getState().connection).toBe("reconnecting");
   });
 
-  it("on state.reset: resyncs /state, replays what arrived meanwhile, clears pendingSeek and invalidates time-dependent queries", async () => {
-    getStateMock.mockResolvedValueOnce(makeState());
+  it("on system.reset: resyncs /state, replays what arrived meanwhile, clears pendingSeek and invalidates time-dependent queries", async () => {
     start();
     const t = transports[0];
     t.open();
-    await flush();
+    t.send(makeState());
 
     // A seek: the REST response lands first (optimistic clock, pendingSeek), then the reset.
     const seekClock = { ...CLOCK, epoch: 4, current_time: "2026-02-11T13:00:00-08:00", local_date: "2026-02-11", hour: 13 };
@@ -195,27 +207,40 @@ describe("startLiveConnection", () => {
     const snapshot = deferred<StateResponse>();
     getStateMock.mockReturnValueOnce(snapshot.promise);
 
-    t.send(msg("state.reset", { epoch: 4, reason: "SEEK" }, 1043, 4));
+    t.send(msg("system.reset", { epoch: 4, reason: "SEEK" }, 1043, 4));
     expect(useSim.getState().resyncing).toBe(true);
-    expect(getStateMock).toHaveBeenCalledTimes(2);
+    expect(getStateMock).toHaveBeenCalledTimes(1);
 
-    t.send(msg("hub.demand_updated", { ...HUB, active_trip_count: 4 }, 11, 4)); // replayed
-    t.send(msg("hub.demand_updated", { ...HUB, active_trip_count: 8 }, 1044, 3)); // old epoch: dropped
-    expect(useSim.getState().hubs.ubc.active_trip_count).toBe(HUB.active_trip_count);
+    t.send(msg("bus.updated", bus("DEADHEADING"), 1044, 4)); // replayed
+    t.send(msg("bus.updated", bus("WAITING"), 1044, 3)); // old epoch: dropped
+    expect(useSim.getState().buses[BUS.id].status).toBe(BUS.status);
 
-    snapshot.resolve(makeState({ epoch: 4, last_seq: 10, simulation: seekClock }));
+    snapshot.resolve(makeState({ epoch: 4, last_seq: 1043, simulation: seekClock }));
     await flush();
 
     const s = useSim.getState();
     expect(s.resyncing).toBe(false);
     expect(s.pendingSeek).toBe(false);
     expect(s.epoch).toBe(4);
-    expect(s.hubs.ubc.active_trip_count).toBe(4);
+    expect(s.buses[BUS.id].status).toBe("DEADHEADING");
     expect(invalidate).toHaveBeenCalledTimes(1);
     // The predicate only reads queryKey.
     const predicate = invalidate.mock.calls[0][0]?.predicate as unknown as (q: { queryKey: unknown[] }) => boolean;
-    expect(predicate({ queryKey: ["forecast", "ubc", 6, "2026-02-11", 13, 4] })).toBe(true);
+    expect(predicate({ queryKey: ["dispatch-events", "ubc", "2026-02-11", 13, 4] })).toBe(true);
     expect(predicate({ queryKey: ["meta"] })).toBe(false);
+  });
+
+  it("a sequence gap refetches /state", async () => {
+    start();
+    const t = transports[0];
+    t.open();
+    t.send(makeState());
+    getStateMock.mockResolvedValueOnce(makeState({ last_seq: 1050 }));
+    t.send(msg("bus.updated", bus("DEADHEADING"), 1045));
+    expect(getStateMock).toHaveBeenCalledTimes(1);
+    await flush();
+    expect(useSim.getState().lastSeq).toBe(1050);
+    expect(useSim.getState().resyncing).toBe(false);
   });
 
   it("resync() without an open socket applies /state directly", async () => {
@@ -229,17 +254,16 @@ describe("startLiveConnection", () => {
   });
 
   it("stop() closes the transport and ignores anything after", async () => {
-    getStateMock.mockResolvedValueOnce(makeState());
     start();
     const t = transports[0];
     t.open();
-    await flush();
+    t.send(makeState());
     connection?.stop();
     expect(t.closed).toBe(true);
-    t.send(msg("hub.demand_updated", { ...HUB, active_trip_count: 42 }, 1043));
+    t.send(msg("bus.updated", bus("DEADHEADING"), 1043));
     t.drop();
     await vi.advanceTimersByTimeAsync(20_000);
-    expect(useSim.getState().hubs.ubc.active_trip_count).toBe(HUB.active_trip_count);
+    expect(useSim.getState().buses[BUS.id].status).toBe(BUS.status);
     expect(transports).toHaveLength(1);
   });
 });

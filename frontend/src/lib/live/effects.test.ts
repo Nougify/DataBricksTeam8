@@ -2,41 +2,35 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { toast, type Action } from "sonner";
 import { qk } from "@/lib/api/queryKeys";
-import { PAUSED_FOR_REVIEW, describeProposal, handleSimEffects, hubDisplayName, surgeToastText } from "./effects";
+import { PAUSED_FOR_REVIEW, describeProposal, eventToastText, handleSimEffects, tripRouteLabel } from "./effects";
 import { useSim } from "./store";
-import { BUS, SURGE, TRIP, makeState } from "./__tests__/fixtures";
+import { EVENT, TRIP, makeState } from "./__tests__/fixtures";
 
 vi.mock("sonner", () => {
-  const toast = Object.assign(vi.fn(), { dismiss: vi.fn() });
+  const toast = Object.assign(vi.fn(), { dismiss: vi.fn(), error: vi.fn() });
   return { toast };
 });
 
 const toastMock = vi.mocked(toast);
-const depotTrip = {
-  ...TRIP,
-  id: "trip-depot",
-  hub_id: "park-royal",
-  bus: { id: "bus-7" },
-  donor_route: null,
-  route: { ...TRIP.route, short_name: "R2" },
-};
+// The captured fixture: bus-02 on route fixture-99 ("99"), event valid-event at UBC.
+const PROPOSAL_TITLE = "New proposal: bus-02 → extra 99 trip at UBC";
 
 describe("toast text", () => {
-  it("describes proposals from route short names", () => {
-    expect(describeProposal(TRIP, "UBC")).toBe("bus from route 25 → 99 at UBC");
-    expect(describeProposal(depotTrip, "Park Royal")).toBe("bus from depot → R2 at Park Royal");
+  it("describes proposals as bus → extra route trip at hub", () => {
+    expect(describeProposal(TRIP, "99", "UBC")).toBe("bus-02 → extra 99 trip at UBC");
+    expect(describeProposal(TRIP, "99", null)).toBe("bus-02 → extra 99 trip");
   });
 
-  it("describes surges with Vancouver time and the index format", () => {
-    expect(surgeToastText(SURGE, "UBC")).toBe("Surge forecast at UBC 13:00, 1.79×");
-  });
-
-  it("names hubs from the /hubs cache, then the fallback map", () => {
+  it("labels the route from the /routes cache, then the feed's route key", () => {
     const qc = new QueryClient();
-    expect(hubDisplayName("park-royal", qc)).toBe("Park Royal");
-    qc.setQueryData(qk.hubs(), [{ id: "park-royal", name: "Park Royal Village" }]);
-    expect(hubDisplayName("park-royal", qc)).toBe("Park Royal Village");
-    expect(hubDisplayName("somewhere")).toBe("somewhere");
+    expect(tripRouteLabel({ ...TRIP, source_route: "R4" }, qc)).toBe("R4");
+    qc.setQueryData(qk.routes(null, false), [{ route_id: TRIP.route_id, short_name: "99 B-Line" }]);
+    expect(tripRouteLabel(TRIP, qc)).toBe("99 B-Line");
+    expect(tripRouteLabel({ ...TRIP, source_route: null })).toBe(TRIP.route_id);
+  });
+
+  it("describes new dispatch events with Vancouver time and the index format", () => {
+    expect(eventToastText(EVENT)).toBe("Surge forecast at UBC 10:00, 2.50×");
   });
 });
 
@@ -45,9 +39,7 @@ describe("handleSimEffects", () => {
     toastMock.mockClear();
     toastMock.dismiss.mockClear();
     useSim.setState(useSim.getInitialState(), true);
-    useSim.getState().setSnapshot(
-      makeState({ buses: [BUS, { ...BUS, id: depotTrip.bus.id, source: { type: "DEPOT", route: null, depot_name: "North Vancouver Transit Centre" } }] }),
-    );
+    useSim.getState().setSnapshot(makeState());
     handleSimEffects([{ kind: "reset", epoch: 0 }], { now: 0 });
     toastMock.dismiss.mockClear();
   });
@@ -56,9 +48,9 @@ describe("handleSimEffects", () => {
     handleSimEffects([{ kind: "trip-proposed", trip: TRIP }, { kind: "auto-paused" }], { now: 1000 });
     expect(toastMock).toHaveBeenCalledTimes(1);
     const [title, options] = toastMock.mock.calls[0];
-    expect(title).toBe("New proposal: bus from route 25 → 99 at UBC");
+    expect(title).toBe(PROPOSAL_TITLE);
     expect(options).toMatchObject({ id: `proposal:${TRIP.id}`, description: PAUSED_FOR_REVIEW });
-    expect(useSim.getState().announcement).toBe(`New proposal: bus from route 25 → 99 at UBC. ${PAUSED_FOR_REVIEW}`);
+    expect(useSim.getState().announcement).toBe(`${PROPOSAL_TITLE}. ${PAUSED_FOR_REVIEW}`);
 
     const action = options?.action as Action;
     action.onClick({} as Parameters<Action["onClick"]>[0]);
@@ -78,17 +70,18 @@ describe("handleSimEffects", () => {
     expect(toastMock).toHaveBeenCalledTimes(1);
   });
 
-  it("names the depot when the bus has no donor route", () => {
-    handleSimEffects([{ kind: "trip-proposed", trip: depotTrip }], { now: 1000 });
-    expect(toastMock.mock.calls[0][1]).toMatchObject({ description: "From depot: North Vancouver Transit Centre." });
+  it("groups new dispatch events per hub, so a busy hub updates one toast in place", () => {
+    handleSimEffects([{ kind: "event-new", event: { ...EVENT, id: "e1" } }], { now: 1000 });
+    handleSimEffects([{ kind: "event-new", event: { ...EVENT, id: "e2" } }], { now: 2000 });
+    expect(toastMock.mock.calls.map((c) => (c[1] as { id: string }).id)).toEqual(["event:ubc", "event:ubc"]);
   });
 
   it("keeps at most three toasts, dismissing the oldest", () => {
     for (let i = 0; i < 4; i++) {
-      handleSimEffects([{ kind: "surge-new", surge: { ...SURGE, id: `surge-${i}` } }], { now: 1000 + i });
+      handleSimEffects([{ kind: "event-new", event: { ...EVENT, id: `e${i}`, hub_id: null, source_location: `place-${i}` } }], { now: 1000 + i });
     }
     expect(toastMock).toHaveBeenCalledTimes(4);
-    expect(toastMock.dismiss).toHaveBeenCalledWith("surge:surge-0");
+    expect(toastMock.dismiss).toHaveBeenCalledWith("event:place-0");
   });
 
   it("an expired proposal replaces its proposal toast", () => {
@@ -96,5 +89,10 @@ describe("handleSimEffects", () => {
     handleSimEffects([{ kind: "trip-expired", trip: { ...TRIP, status: "EXPIRED" } }], { now: 2000 });
     expect(toastMock.dismiss).toHaveBeenCalledWith(`proposal:${TRIP.id}`);
     expect(toastMock.mock.calls[1][0]).toBe("Proposal expired");
+  });
+
+  it("reports system.error", () => {
+    handleSimEffects([{ kind: "system-error", message: "source query failed" }], { now: 1000 });
+    expect(toastMock.error).toHaveBeenCalledWith("The simulation reported an error.", expect.objectContaining({ description: "source query failed" }));
   });
 });

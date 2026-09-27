@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMeta, usePause, useResume, useSetSpeed } from "@/lib/api/hooks";
+import { SPEEDS, type Speed } from "@/lib/api/schemas";
 import { useSim } from "@/lib/live/store";
 import { cn } from "@/lib/utils";
 import { toastFailure } from "./actions";
@@ -43,7 +44,7 @@ export function PlayPauseButton({ className }: { className?: string }) {
 }
 
 /**
- * Speed as a segmented control built from /meta.allowed_speeds, each option explained in a tooltip.
+ * Speed as a segmented control built from /meta.supported_speeds, each option explained in a tooltip.
  * `size="lg"` fills its container with 44 px targets (phone menu).
  */
 export function SpeedControl({ size = "sm", className }: { size?: "sm" | "lg"; className?: string }) {
@@ -58,8 +59,8 @@ export function SpeedControl({ size = "sm", className }: { size?: "sm" | "lg"; c
 
   const shown = setSpeed.isPending ? setSpeed.variables : clockSpeed;
   const onChange = (value: string) => {
-    const speed = Number(value);
-    if (!value || !Number.isFinite(speed) || speed === clockSpeed) return;
+    const speed = Number(value) as Speed;
+    if (!value || !(SPEEDS as readonly number[]).includes(speed) || speed === clockSpeed) return;
     setSpeed.mutate(speed, { onError: (e) => toastFailure("change the speed", e) });
   };
 
@@ -74,7 +75,7 @@ export function SpeedControl({ size = "sm", className }: { size?: "sm" | "lg"; c
       aria-label="Simulation speed"
       className={cn(size === "lg" && "w-full", className)}
     >
-      {meta.data.allowed_speeds.map((speed) => (
+      {meta.data.supported_speeds.map((speed) => (
         <Tooltip key={speed}>
           <TooltipTrigger asChild>
             <ToggleGroupItem

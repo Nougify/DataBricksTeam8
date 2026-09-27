@@ -1,24 +1,33 @@
-// Typed test data built from the message.txt examples (validated through the schemas on the way in).
+// Typed test data for the live layer, built from payloads captured from the real v3 backend (validated through the
+// schemas on the way in). The clock is moved to 2025-12-06 10:00 PST so time maths reads naturally.
 import * as S from "@/lib/api/schemas";
-import additionalTrip from "@/lib/api/__fixtures__/additional-trip.json";
-import bus from "@/lib/api/__fixtures__/bus.json";
-import clock from "@/lib/api/__fixtures__/clock.json";
-import hubStatus from "@/lib/api/__fixtures__/hub-status.json";
-import surge from "@/lib/api/__fixtures__/surge.json";
+import state from "@/lib/api/__fixtures__/state.json";
 
-export const CLOCK = S.Clock.parse(clock); // 2025-12-06 10:00 PST, PAUSED, 60x, epoch 3
-export const HUB = S.HubStatus.parse(hubStatus);
-export const SURGE = S.Surge.parse(surge);
-export const BUS = S.Bus.parse(bus);
-export const TRIP = S.AdditionalTrip.parse(additionalTrip);
+const captured = S.StateResponse.parse(state);
+
+/** 2025-12-06 10:00 PST, PAUSED, 60x, epoch 3. */
+export const CLOCK: S.Clock = {
+  current_time: "2025-12-06T10:00:00-08:00",
+  local_date: "2025-12-06",
+  hour: 10,
+  speed: 60,
+  status: "PAUSED",
+  min_time: "2025-11-15T00:00:00-08:00",
+  max_time: "2026-08-31T23:00:00-07:00",
+  approval_mode: "MANUAL",
+  auto_pause_on_proposal: true,
+  epoch: 3,
+};
+export const EVENT: S.DispatchEvent = captured.dispatch_events[0];
+export const BUS: S.Bus = captured.buses[0];
+export const TRIP: S.AdditionalTrip = captured.additional_trips.find((t) => t.status === "PROPOSED")!;
 
 export function makeState(overrides: Partial<S.StateResponse> = {}): S.StateResponse {
   return {
     epoch: 3,
     last_seq: 1042,
     simulation: CLOCK,
-    hubs: [HUB],
-    surges: [SURGE],
+    dispatch_events: [EVENT],
     buses: [BUS],
     additional_trips: [TRIP],
     ...overrides,
@@ -35,4 +44,9 @@ export function msg<T extends S.WsMessageType>(
   simulationTime = "2025-12-06T10:00:00-08:00",
 ): S.WsMessageOf<T> {
   return { type, seq, epoch, simulation_time: simulationTime, data } as S.WsMessageOf<T>;
+}
+
+/** A clock.updated tick (reason null) at `time`. */
+export function tick(time: string, seq: number, clock: S.Clock = CLOCK, epoch = 3) {
+  return msg("clock.updated", { ...clock, current_time: time, reason: null }, seq, epoch, time);
 }

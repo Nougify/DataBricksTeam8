@@ -1,6 +1,6 @@
 # Architecture (module contracts)
 
-Read with `../spec.md` (what to build), `../message.txt` (API contract; wins on shapes) and `DECISIONS.md` (owner answers; wins over the spec).
+Read with `../spec.md` (what to build), `../backendspec.md` (API contract v3; wins on shapes) and `DECISIONS.md` (owner answers; wins over the spec). The real v3 backend is in `../backend/`; the frontend mirrors its payloads.
 Several agents build this in parallel, so **keep to these file paths and exported names**. If you must change an interface, change its callers too and note it at the bottom of this file.
 
 ## Ground rules
@@ -21,17 +21,19 @@ Several agents build this in parallel, so **keep to these file paths and exporte
 src/
   config/app.ts            APP.name, APP.tagline (only place the name lives)
   config/env.ts            ENV: apiBaseUrl, wsUrl, useMocks, basemapLightUrl, basemapDarkUrl, isDev
+  config/hubs.ts           HUBS (id, name, location_name, location, catchment_m): v3 has no /hubs endpoint
+  config/scenario.ts       PRESETS, DEFAULT_START_TIME, DAY_TYPE_LABELS, SURGE_THRESHOLD, SEVERITY_BANDS
   app/layout.tsx           fonts (next/font), <Providers>, metadata title from APP.name
   app/page.tsx             <Console /> (client)
   app/providers.tsx        ThemeProvider (next-themes, attribute="class", defaultTheme="system"),
                            QueryClientProvider, TooltipProvider, <Toaster/>, <LiveBoot/> (starts mocks, then live connection)
   app/globals.css          Tailwind v4 + shadcn tokens + semantic tokens (both themes)
 
-  lib/api/schemas.ts       zod schemas + inferred types for ALL of message.txt (done; don't rename exports)
-  lib/api/client.ts        apiGet / apiSend, ApiError, contract-mismatch reporting
-  lib/api/endpoints.ts     one typed function per endpoint (getMeta, getState, getForecast, approveTrip, ...)
-  lib/api/queryKeys.ts     key factories (qk.meta(), qk.forecast(hub, horizon, localDate, hour, epoch), ...)
-  lib/api/hooks.ts         TanStack hooks: queries (with staleTime rules) + mutations
+  lib/api/schemas.ts       zod schemas + inferred types for backendspec.md v3 (DispatchEvent, AdditionalTrip, Bus, Clock, /state, /meta, WS)
+  lib/api/client.ts        apiGet / apiSend, ApiError, contract-mismatch reporting, tripConflictMessage (409 copy)
+  lib/api/endpoints.ts     one typed function per v3 endpoint (getMeta, getState, seekClock, approveTrip, getRoutes, ...)
+  lib/api/queryKeys.ts     key factories (qk.meta(), qk.routes(), qk.hubForecast(hub), qk.trip(...))
+  lib/api/hooks.ts         TanStack hooks: queries (with staleTime rules), bundled-snapshot loaders, mutations
   lib/api/contractIssues.ts  tiny zustand store of contract mismatches for the dev banner
   lib/time/index.ts        Vancouver time helpers (done)
   lib/format/index.ts      display formatters
@@ -45,18 +47,23 @@ src/
   lib/live/connection.ts   startup sequence, buffering, reconnect/backoff
   lib/live/effects.ts      toasts + aria-live announcements from reducer effects
   lib/live/timeKey.ts      throttled sim-hour key for time-dependent queries (spec §11.2)
+  lib/live/episodes.ts     display-only surge episodes grouped from dispatch events (buildEpisodes, useEpisodes)
   lib/url/state.ts         URL <-> UI state sync (hub, tab, basis, h, layers, t)
 
-  mocks/data/*.json        Databricks snapshots (+ README.md listing the queries)
-  mocks/data/index.ts      typed accessors over the JSON
+  data/*.json              bundled Databricks analytics snapshots, shared by mock and real mode (+ README.md with the SQL)
+  data/index.ts            typed accessors over the small snapshots (hubs, daily, origins, routes, ...)
+  data/forecast.ts         lazy per-hub hourly actual/forecast/typical (model.surge_forecast_hourly)
+  data/feed.ts             lazy per-month dispatch feed (model.surge_recommendations_backtest), the mock's event source
+  data/metrics.ts          scorecard (model.surge_model_metrics)
+  (frontend/scripts/pull-analytics.mjs re-pulls forecast, metrics, feed and extra routes, read-only)
+
   mocks/sim/rng.ts         seeded PRNG + hash (deterministic by key)
-  mocks/sim/synth.ts       pings / typical / forecast / origins / late-night / routes-load synthesis
-  mocks/sim/scenarios.ts   scripted scenarios (DECISIONS.md)
-  mocks/sim/mockSim.ts     MockSim: clock, epoch/seq, surges/trips/buses state machine, event emission
-  mocks/handlers/index.ts  MSW handlers for every REST endpoint
-  mocks/ws/fakeTransport.ts  SimTransport over MockSim (4/s limits, drop-connection support)
-  mocks/browser.ts         startMocks(): MSW worker + MockSim singleton
-  mocks/devFlags.ts        ?mock_nonhub, ?mock_state parsing
+  mocks/sim/network.ts     mock GTFS index + fleet (mirrors backend/config/fleet.json) + feed → DispatchEvent mapping
+  mocks/sim/mockSim.ts     MockSim: mirrors the backend coordinator (activation, proposals, expiry, movement, seek)
+  mocks/handlers/sim.ts    MSW handlers for every v3 REST endpoint
+  mocks/ws/fakeTransport.ts  SimTransport over MockSim: /state snapshot first, then envelopes; drop-connection support
+  mocks/browser.ts         startMocks(): MSW worker + MockSim singleton (waits for the first feed months)
+  mocks/devFlags.ts        ?mock_state parsing
 
   components/ui/*          shadcn (generated; restyle via tokens, avoid editing logic)
   components/*             EmptyState, Kpi, SourceNote, RouteBullet, LoadBar, StateBoundary, charts/EChart
@@ -76,7 +83,7 @@ src/
 ```ts
 export const ENV: {
   apiBaseUrl: string;   // NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1"
-  wsUrl: string;        // NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/api/v1/ws/simulation"
+  wsUrl: string;        // NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws"
   useMocks: boolean;    // NEXT_PUBLIC_USE_MOCKS === "true"
   basemapLightUrl: string; basemapDarkUrl: string;
   isDev: boolean;       // process.env.NODE_ENV !== "production"
@@ -86,9 +93,10 @@ Reference `process.env.NEXT_PUBLIC_*` literally, because Next inlines them at bu
 
 ### lib/api/client.ts
 ```ts
-export class ApiError extends Error { status: number; code: string; trip?: AdditionalTrip }
+export class ApiError extends Error { status: number; code: string }
 export async function apiGet<T>(path: string, schema: z.ZodType<T>, params?: Record<string, string | number | boolean | undefined>): Promise<T>;
-export async function apiSend<T>(method: "POST" | "PUT", path: string, body: unknown, schema: z.ZodType<T>): Promise<T>;
+export async function apiSend<T>(method: "POST", path: string, body: unknown, schema: z.ZodType<T>): Promise<T>;
+export function tripConflictMessage(err: ApiError): string; // 409 → spec §9.3 copy (the backend sends HTTP_ERROR + a message, no trip)
 ```
 - Non-2xx: parse `ErrorBody` and throw `ApiError` (network failure → code `NETWORK`).
 - Validation, dev (`ENV.isDev`): `safeParse`. On failure, `console.error(path, issues)` and `reportContractIssue(endpoint)`, then **still return the raw data cast to T**, so the UI keeps working and the banner shows.
@@ -111,25 +119,26 @@ export interface SimSlice {
   clock: Clock | null;
   receivedAt: number;              // wall ms (performance.now()-free; use Date.now()) when clock was last set by the server
   epoch: number; lastSeq: number;
-  surges: Record<string, Surge>; trips: Record<string, AdditionalTrip>; buses: Record<string, Bus>;
-  hubs: Record<string, HubStatus>;
+  events: Record<string, DispatchEvent>; trips: Record<string, AdditionalTrip>; buses: Record<string, Bus>;
   resyncing: boolean;
   lastSimTime: string | null;      // simulation_time of the last applied message (for stale notes)
 }
 export type SimEffect =
   | { kind: "trip-proposed"; trip: AdditionalTrip }
   | { kind: "auto-paused" }
-  | { kind: "surge-new"; surge: Surge }
+  | { kind: "event-new"; event: DispatchEvent }
   | { kind: "trip-expired"; trip: AdditionalTrip }
+  | { kind: "system-error"; message: string }
   | { kind: "reset"; epoch: number };
 export const emptySim: SimSlice;
 export function applySnapshot(s: SimSlice, state: StateResponse, wallNow: number): SimSlice;
 export function applyMessage(s: SimSlice, msg: WsMessage, wallNow: number): { sim: SimSlice; effects: SimEffect[] };
 ```
-- Drop a message if `msg.epoch < s.epoch`, or if `msg.seq <= s.lastSeq`, except `state.reset`, which applies whenever its `data.epoch > s.epoch`.
-- `state.reset`: set `resyncing = true` and emit `{kind:"reset"}`. The connection layer then refetches `/state`.
-- Clock: `simulation.tick` updates `current_time`/`local_date`/`hour` and `receivedAt`. `simulation.state_changed` replaces the clock.
-- `surge-new` fires only for a surge id not seen before in this epoch.
+- Drop a message if `msg.epoch < s.epoch`, or if `msg.seq <= s.lastSeq`, except `system.reset`, which applies whenever its `data.epoch > s.epoch`.
+- `system.reset`, a newer-epoch message, or a seq gap (`seq > lastSeq + 1`): set `resyncing = true` and emit `{kind:"reset"}`. The connection layer then refetches `/state`.
+- Clock: `clock.updated` replaces the clock. Ticks carry `reason: null`; `AUTO_PAUSE_PROPOSAL` emits `auto-paused`.
+- `event-new` fires only for a dispatch event id not seen before in this epoch. `trip-proposed` fires on `proposal.created`.
+- The WebSocket's first frame is the /state snapshot, which the connection applies. REST /state is the fallback after 3 s.
 
 ### lib/live/store.ts
 ```ts
@@ -236,3 +245,32 @@ All additive; `types.ts` unchanged.
   - A surge that went `NO_BUS_AVAILABLE` keeps that status when its window starts; only `PENDING`/`AWAITING_APPROVAL` become `EXPIRED`.
   - Seek to a time inside a scripted window (decisions discarded) shows the surge `ACTIVE`/`EXPIRED` with proposal A `EXPIRED`. A seek past the dispatch time re-times the re-opened proposal to leave at T.
   - The same trip ids come back after every seek (`trip-ubc-2025-12-06-a`, `-b`, `trip-park-royal-2025-12-26-a`, `trip-waterfront-2026-07-25-a`); epochs tell them apart.
+
+## v3 migration (Milestone 2a, 2026-09-27)
+
+- **Contract:** `schemas.ts` now describes backendspec.md v3 plus the real backend's optional extras. The v2 objects (Surge, HubStatus, Forecast, Origins, …) and their endpoints are gone. The fixtures in `lib/api/__fixtures__/` are payloads captured from `backend/` running in fixture mode.
+- **Data:** the analytics snapshots moved from `mocks/data/` to `src/data/`, shared by both modes. New files: `forecast/<hub>.json`, `metrics.json`, `feed/<month>.json` and `routes_feed_extra.json` (see `src/data/README.md`).
+- **Live:** the store holds `events` (DispatchEvents) instead of `surges` and `hubs`. Hub halos use the bundled forecast's last full hour and `lib/live/episodes.ts`.
+- **Mocks:** MockSim was rewritten to mirror the backend (see its header, and DECISIONS.md "MockSim (v3)", "2a answers" and "Mock-only deviations"). The v2 read handlers, synthesis and scripted scenarios were removed.
+- **Top bar:** presets and the Reset demo time come from `config/scenario.ts`, and presets outside the clock's bounds are disabled. Auto-pause is a read-only indicator. Speeds come from `/meta.supported_speeds`.
+
+## Milestone 2b UI (2026-09-27)
+
+Decisions: DECISIONS.md "2b answers". New modules:
+
+- **Data:** `data/events.ts` (`DRIVER_EVENTS`, `driverEventsBetween`) and `data/feedDays.ts` (`feedDays`, `feedDaysActionableBy`, from `feed_days.json`, which `scripts/derive-feed-days.mjs` builds).
+- **Live helpers:** `lib/live/demand.ts` (`previousHour`, `nextHour`, `lastFullHourOf`, `useAllHubForecasts`, `useLastFullHour(target)`). `lib/live/trips.ts` (`approvalQueue`, `activeTrips`, `minutesLeft`, `tripProgress`, `tripEta`, `tripHub`). `episodes.ts` adds `episodeLeadMinutes` and `latestResolvedEpisode`.
+- **Store (changed):** `OriginsBasis` is now `"typical" | "all"` (`DEFAULT_ORIGINS_BASIS` = typical; URL `basis=all`). New are `forecastTarget` / `setForecastTarget` (`"arrivals" | "departures"`, store only) and `HORIZON_OPTIONS` (6/12/24).
+- **Components:** `SeverityBadge` / `SeverityMark`, `TripStatusBadge`, and `Segmented` (a single-choice control styled like the speed control). `SourceNote` now wraps long table names.
+- **Features:**
+  - `features/overview/*`: `NetworkOverview`, `HubCards`, `ApprovalQueue` (optional `hubId`), `ActiveTrips` (optional `hubId`), `AwayEvents` and `ScorecardStrip`.
+  - `features/trips/*`: `useTripActions` (Approve / Reject with the toasts and 409 copy) and `TripRoute`.
+  - `features/hub/*`: `HubPanel` (header, status line, tabs), `now/*` (`NowTab`, `ForecastChart`, pure `forecastWindow.ts`), `origins/*` (`OriginsTab`, pure `originMix.ts`, `useOriginMix`) and `DispatchInterim` (hub queue + active trips until M3).
+  - `features/timeline/*`: `Timeline` (full / compact) and pure `scale.ts`.
+- **Map:**
+  - `layers/OriginsLayers.tsx` adds arcs (slot 3, with HTML origin labels and the key) and bubbles (slot 4) on the `origins` toggle.
+  - `arcs.ts` holds the geometry and scales.
+  - `camera.tsx` fits the hub plus its origins with a share of 2% or more (key `hub:<id>:origins`).
+  - `FitTarget.extraPadding` is new. `hubs.ts` `useLastHourIndex` now delegates to `lib/live/demand`.
+- **Shell:** `slots.tsx` renders the overview and the hub panel, and `TimelineSlot` renders `Timeline`. The Console root is `md:flex-none`, so `md:h-dvh` holds when the panel is taller than the screen.
+- **Tests:** `features/hub/m2b.test.ts`. `e2e/smoke.spec.ts` gains an M2b flow, and `e2e/screenshots.spec.ts` captures overview, Now, Now chart, Origins and the phone timeline at a fixed sim time (`SHOT_TAG`, `SHOT_TIME`, `SHOT_QUERY`).

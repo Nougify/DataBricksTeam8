@@ -2,6 +2,7 @@
 // while RUNNING it is current_time + (wallNow − receivedAt) × speed, snapping back on every tick.
 import { useMemo, useSyncExternalStore } from "react";
 import type { Clock } from "@/lib/api/schemas";
+import { vancouverParts } from "@/lib/time";
 import { useSim } from "./store";
 
 /** Sim time in epoch ms, or NaN when no clock has been received yet. */
@@ -106,4 +107,14 @@ export function useSimNow(throttleMs = 250): number {
   const source = useMemo(() => createSimNowSource(throttleMs), [throttleMs]);
   const value = useSyncExternalStore(source.subscribe, source.getSnapshot, serverSnapshot);
   return value === NO_CLOCK ? Number.NaN : value;
+}
+
+/**
+ * The clock's Vancouver local date and hour. The real backend sends `local_date` and `hour`, but backendspec.md
+ * doesn't require them, so fall back to deriving them from `current_time`.
+ */
+export function clockLocal(clock: Pick<Clock, "current_time" | "local_date" | "hour">): { local_date: string; hour: number } {
+  if (clock.local_date !== undefined && clock.hour !== undefined) return { local_date: clock.local_date, hour: clock.hour };
+  const p = vancouverParts(Date.parse(clock.current_time));
+  return { local_date: p.local_date, hour: p.hour };
 }

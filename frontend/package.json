@@ -11,7 +11,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "screenshots": "playwright test --project=screenshots"
+    "screenshots": "playwright test --project=screenshots",
+    "pull:analytics": "node scripts/pull-analytics.mjs",
+    "derive:feed-days": "node scripts/derive-feed-days.mjs"
   },
   "dependencies": {
     "@protomaps/basemaps": "^5.7.2",

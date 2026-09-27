@@ -2,26 +2,16 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { DayType } from "@/lib/api/schemas";
+import { DAY_TYPE_LABELS } from "@/config/scenario";
 import { fmtClock } from "@/lib/format";
 import { useSimNow } from "@/lib/live/clock";
 import { dayTypeOf, toVancouverIso, vancouverParts } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
-// Used only until /meta has loaded (or if it fails), so the badge never flashes empty.
-const FALLBACK_DAY_TYPE_LABELS: Record<DayType, string> = {
-  mf: "Weekday",
-  sat: "Saturday",
-  sun_hol: "Sunday / holiday",
-};
-
-/**
- * Day type for a Vancouver date, derived locally because v3 does not expose the
- * retired analytical timeline endpoint.
- */
+/** Day type for a Vancouver date, derived locally with the pipeline's BC holidays (v3 has no timeline endpoint). */
 function useDayTypeLabel(localDate: string | null): string | null {
   if (!localDate) return null;
-  return FALLBACK_DAY_TYPE_LABELS[dayTypeOf(localDate)];
+  return DAY_TYPE_LABELS[dayTypeOf(localDate)];
 }
 
 /**

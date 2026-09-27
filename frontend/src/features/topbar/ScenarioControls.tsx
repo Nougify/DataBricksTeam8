@@ -1,9 +1,10 @@
 "use client";
 
-// Scenario controls: presets, the date + hour picker, the auto-pause switch and Reset demo (spec §6).
+// Scenario controls: presets, the date + hour picker, the read-only auto-pause indicator and Reset demo (spec §6).
+// v3 has no settings endpoint, so auto-pause is shown, not set (DECISIONS.md "Contract (zod)").
 // On desktop they sit in the top bar; on tablet and phone the overflow menus reuse the same pieces.
 import { useId, useState } from "react";
-import { CalendarDays, ChevronDown, RotateCcw } from "lucide-react";
+import { CalendarDays, ChevronDown, PauseCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,10 +12,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { useMeta } from "@/lib/api/hooks";
-import type { Clock, Preset } from "@/lib/api/schemas";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PRESETS, type Preset } from "@/config/scenario";
+import type { Clock } from "@/lib/api/schemas";
 import { fmtDate, hourLabel } from "@/lib/format";
+import { clockLocal } from "@/lib/live/clock";
 import { useSim } from "@/lib/live/store";
 import { toVancouverIso, vancouverParts, vancouverToMs } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -22,22 +24,42 @@ import { useJumpTo, usePresetJump, useResetDemo } from "./actions";
 
 // ---------- presets ----------
 
-/** Menu rows for the presets: label, then the description on a second, muted line. */
-export function PresetItems({ presets, onSelect }: { presets: readonly Preset[]; onSelect: (preset: Preset) => void }) {
-  return presets.map((preset) => (
-    <DropdownMenuItem
-      key={preset.id}
-      onSelect={() => onSelect(preset)}
-      className="flex-col items-start gap-0.5 px-2 py-1.5"
-    >
-      <span className="font-semibold">{preset.label}</span>
-      <span className="text-xs text-muted-foreground">{preset.description}</span>
-    </DropdownMenuItem>
-  ));
+/** Whether a preset's time is inside the clock's bounds (a backend may serve a narrower window than the feed). */
+function usePresetInRange(): (preset: Preset) => boolean {
+  const min = useSim((s) => (s.clock ? Date.parse(s.clock.min_time) : null));
+  const max = useSim((s) => (s.clock ? Date.parse(s.clock.max_time) : null));
+  return (preset) => {
+    const t = Date.parse(preset.time);
+    return min === null || max === null || (t >= min && t <= max);
+  };
+}
+
+/**
+ * Menu rows for the presets: label, then the description on a second, muted line. A preset outside the clock's
+ * bounds is disabled and says so, rather than failing on selection.
+ */
+export function PresetItems({ onSelect }: { onSelect: (preset: Preset) => void }) {
+  const inRange = usePresetInRange();
+  return PRESETS.map((preset) => {
+    const ok = inRange(preset);
+    return (
+      <DropdownMenuItem
+        key={preset.id}
+        disabled={!ok}
+        onSelect={() => onSelect(preset)}
+        className="flex-col items-start gap-0.5 px-2 py-1.5"
+      >
+        <span className="font-semibold">{preset.label}</span>
+        <span className="text-xs text-muted-foreground">
+          {ok ? preset.description : "Outside the simulation's time range on this backend."}
+        </span>
+      </DropdownMenuItem>
+    );
+  });
 }
 
 export function PresetsMenu({ fullWidth = false, className }: { fullWidth?: boolean; className?: string }) {
-  const meta = useMeta();
+  const hasClock = useSim((s) => s.clock !== null);
   const { jumpToPreset, isPending } = usePresetJump();
 
   return (
@@ -46,7 +68,7 @@ export function PresetsMenu({ fullWidth = false, className }: { fullWidth?: bool
         <Button
           variant="outline"
           size={fullWidth ? "lg" : "sm"}
-          disabled={!meta.data || meta.data.presets.length === 0 || isPending}
+          disabled={!hasClock || isPending}
           className={cn(fullWidth && "h-11 w-full justify-between", className)}
         >
           {isPending ? "Jumping…" : "Presets"}
@@ -54,7 +76,7 @@ export function PresetsMenu({ fullWidth = false, className }: { fullWidth?: bool
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80 max-w-[calc(100vw-2rem)] rounded-xl p-1.5 shadow-float">
-        {meta.data && <PresetItems presets={meta.data.presets} onSelect={jumpToPreset} />}
+        <PresetItems onSelect={jumpToPreset} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -77,8 +99,8 @@ const HOURS = Array.from({ length: 24 }, (_, h) => h);
  */
 export function DateHourForm({ clock, onDone }: { clock: Clock; onDone?: () => void }) {
   const hourId = useId();
-  const [date, setDate] = useState(clock.local_date);
-  const [hour, setHour] = useState(clock.hour);
+  const [date, setDate] = useState(() => clockLocal(clock).local_date);
+  const [hour, setHour] = useState(() => clockLocal(clock).hour);
   const { jump, isPending } = useJumpTo();
 
   const minMs = Date.parse(clock.min_time);
@@ -104,7 +126,7 @@ export function DateHourForm({ clock, onDone }: { clock: Clock; onDone?: () => v
         startMonth={toCalendarDate(minDate)}
         endMonth={toCalendarDate(maxDate)}
         disabled={[{ before: toCalendarDate(minDate) }, { after: toCalendarDate(maxDate) }]}
-        today={toCalendarDate(clock.local_date)}
+        today={toCalendarDate(clockLocal(clock).local_date)}
         className="p-0"
       />
       <div className="flex items-end gap-2">
@@ -186,24 +208,34 @@ export function DatePickerDialog({ open, onOpenChange }: { open: boolean; onOpen
 
 // ---------- auto-pause ----------
 
-/** Current auto-pause setting, showing the requested value while the update is in flight. */
-export function useAutoPause() {
-  const setting = useSim((s) => s.clock?.auto_pause_on_proposal ?? null);
-  return { checked: setting ?? false, disabled: true, setChecked: () => undefined };
+/** The backend's auto-pause setting (`Clock.auto_pause_on_proposal`), or null when the backend doesn't send it. */
+export function useAutoPause(): boolean | null {
+  return useSim((s) => s.clock?.auto_pause_on_proposal ?? null);
 }
 
-export const AUTO_PAUSE_LABEL = "Pause when a bus is proposed";
+export const AUTO_PAUSE_TOOLTIP = "Set on the backend (AUTO_PAUSE_ON_PROPOSAL). It can't be changed from the console.";
 
-export function AutoPauseSwitch({ className }: { className?: string }) {
-  const id = useId();
-  const { checked, disabled, setChecked } = useAutoPause();
+export function autoPauseText(on: boolean): string {
+  return on ? "Pauses when a bus is proposed" : "Doesn't pause on proposals";
+}
+
+/** Read-only indicator; hidden when the backend doesn't report the setting. */
+export function AutoPauseIndicator({ className }: { className?: string }) {
+  const on = useAutoPause();
+  if (on === null) return null;
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={setChecked} />
-      <Label htmlFor={id} className="font-normal whitespace-nowrap">
-        {AUTO_PAUSE_LABEL}
-      </Label>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground", className)}
+        >
+          <PauseCircle aria-hidden className="size-4" />
+          {autoPauseText(on)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{AUTO_PAUSE_TOOLTIP}</TooltipContent>
+    </Tooltip>
   );
 }
 

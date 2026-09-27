@@ -10,6 +10,9 @@ const sans = Atkinson_Hyperlegible_Next({
   variable: "--font-sans",
   subsets: ["latin"],
   display: "swap",
+  // Next has no metrics for this family, so it can't build an adjusted fallback; name one explicitly.
+  adjustFontFallback: false,
+  fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"],
 });
 
 // Headings, the sim clock, KPI values, countdowns and route plates: a signage-derived condensed face.

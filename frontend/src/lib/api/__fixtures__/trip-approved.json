@@ -1,0 +1,122 @@
+{
+  "id": "trip-62051c129ac8e743992b",
+  "dispatch_event_id": "valid-event",
+  "bus_id": "bus-01",
+  "route_id": "fixture-99",
+  "status": "BUS_EN_ROUTE",
+  "proposed_at": "2026-07-10T09:30:00-07:00",
+  "approval_expires_at": "2026-07-10T10:00:00-07:00",
+  "dispatch_time": "2026-07-10T09:30:00-07:00",
+  "target_event_time": "2026-07-10T10:00:00-07:00",
+  "estimated_arrival_time": "2026-07-10T09:30:06-07:00",
+  "service_departure_time": "2026-07-10T10:00:00-07:00",
+  "estimated_completion_time": "2026-07-10T10:20:00-07:00",
+  "added_capacity": 50,
+  "rationale": "Selected first feasible recommendation; ranked by arrival, deadhead distance, route, pattern, and bus.",
+  "source_priority": 0.9,
+  "source_route": "99",
+  "destination": "Downtown",
+  "selected_candidate": {
+    "route_id": "fixture-99",
+    "pattern_id": "fixture-pattern-99",
+    "source_stop_id": "UBC1",
+    "destination_stop_id": "ALMA",
+    "source_stop_sequence": 1,
+    "destination_stop_sequence": 2,
+    "direction_id": 0,
+    "requested_service_date": "2026-07-10",
+    "feed_service_date": "2026-07-10",
+    "representative_service": false,
+    "scheduled_trip_ids": [
+      "2026-07-10:fixture-trip-99"
+    ]
+  },
+  "movement_plan": {
+    "route_id": "fixture-99",
+    "pattern_id": "fixture-pattern-99",
+    "source_stop_id": "UBC1",
+    "destination_stop_id": "ALMA",
+    "reference_scheduled_trip_id": "2026-07-10:fixture-trip-99",
+    "mode": "PROACTIVE",
+    "deadhead": {
+      "kind": "DEADHEAD",
+      "path": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.246,
+            49.2606
+          ],
+          [
+            -123.246,
+            49.261
+          ]
+        ]
+      },
+      "distance_m": 44.47803209457041,
+      "duration_seconds": 6,
+      "provenance": {
+        "provider": "straight_line",
+        "is_approximation": true,
+        "method": "great-circle distance at configured constant speed",
+        "speed_kph": 30
+      }
+    },
+    "service": {
+      "kind": "SERVICE",
+      "path": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.246,
+            49.261
+          ],
+          [
+            -123.185,
+            49.2635
+          ]
+        ]
+      },
+      "distance_m": 4435.225533606361,
+      "duration_seconds": 1200,
+      "provenance": {
+        "provider": "gtfs",
+        "is_approximation": false,
+        "method": "selected GTFS pattern shape and stop-time offsets",
+        "speed_kph": null
+      }
+    },
+    "return_leg": {
+      "kind": "RETURN",
+      "path": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -123.185,
+            49.2635
+          ],
+          [
+            -123.246,
+            49.2606
+          ]
+        ]
+      },
+      "distance_m": 4438.253185520335,
+      "duration_seconds": 533,
+      "provenance": {
+        "provider": "straight_line",
+        "is_approximation": true,
+        "method": "great-circle distance at configured constant speed",
+        "speed_kph": 30
+      }
+    },
+    "dispatch_time": "2026-07-10T09:30:00-07:00",
+    "estimated_arrival_time": "2026-07-10T09:30:06-07:00",
+    "service_departure_time": "2026-07-10T10:00:00-07:00",
+    "estimated_completion_time": "2026-07-10T10:20:00-07:00",
+    "estimated_return_time": "2026-07-10T10:28:53-07:00",
+    "waiting_seconds": 1794,
+    "arrival_lateness_seconds": 0,
+    "total_distance_m": 8917.956751221267
+  }
+}

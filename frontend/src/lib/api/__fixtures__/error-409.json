@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "HTTP_ERROR",
+    "message": "trip is not proposed"
+  }
+}

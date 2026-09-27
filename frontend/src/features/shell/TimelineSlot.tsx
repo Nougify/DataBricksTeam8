@@ -1,20 +1,13 @@
-import { cn } from "@/lib/utils";
+"use client";
+
+import { Timeline } from "@/features/timeline/Timeline";
+import { useBreakpoint } from "@/lib/useBreakpoint";
 
 /**
- * Placeholder for the timeline scrubber (spec §17.1), replaced in milestone 2. It holds the strip's final
- * height so the layout around it is already right: 88 px on desktop, a compact 56 px on tablet. On phone the
- * Console shows it inside the "Timeline" bottom sheet instead.
+ * The timeline scrubber (spec §17.1): 88 px with three lanes on desktop, a compact 56 px markers-only strip on
+ * tablet. On phone the Console shows the full version inside the "Timeline" bottom sheet.
  */
 export function TimelineSlot({ className }: { className?: string }) {
-  return (
-    <section
-      aria-label="Timeline"
-      className={cn("flex h-14 shrink-0 items-center gap-3 border-t bg-background px-4 xl:h-[88px]", className)}
-    >
-      <p className="text-sm font-semibold">Timeline</p>
-      <p className="text-xs text-muted-foreground">
-        Daily pings per hub, Nov 2025 to Aug 2026, arrive in the next build step.
-      </p>
-    </section>
-  );
+  const bp = useBreakpoint();
+  return <Timeline compact={bp === "tablet"} className={className} />;
 }

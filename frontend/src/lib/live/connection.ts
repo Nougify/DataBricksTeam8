@@ -1,10 +1,11 @@
-// Live connection (spec §11.4). Startup, repeated after every reconnect:
+// Live connection (spec §11.4, backendspec.md §9). Startup, repeated after every reconnect:
 //   1. open the transport and buffer incoming messages;
-//   2. fetch /state and apply it (epoch, last_seq);
+//   2. the first frame is the atomic /state snapshot: apply it (epoch, last_seq). If it hasn't arrived within
+//      BOOTSTRAP_TIMEOUT_MS, fetch /state instead;
 //   3. replay buffered messages from that epoch with seq > last_seq;
 //   4. apply live.
-// A `state.reset` (after a seek) re-runs steps 2–3 on the open transport. Reconnects back off
-// exponentially with jitter, from 0.5 s to 10 s.
+// A `system.reset` (after a seek) or a sequence gap refetches /state on the open transport. Reconnects back
+// off exponentially with jitter, from 0.5 s to 10 s.
 import type { QueryClient } from "@tanstack/react-query";
 import { getState } from "@/lib/api/endpoints";
 import { isTimeDependentKey } from "@/lib/api/queryKeys";
@@ -21,6 +22,8 @@ export const MAX_BACKOFF_MS = 10_000;
 export const OFFLINE_AFTER_FAILURES = 5;
 /** Upper bound on messages held while /state is in flight; the oldest are the ones the snapshot covers. */
 const MAX_BUFFER = 5_000;
+/** How long to wait for the WebSocket's bootstrap snapshot before fetching /state over REST. */
+export const BOOTSTRAP_TIMEOUT_MS = 3_000;
 
 export interface LiveConnection {
   stop(): void;
@@ -40,7 +43,7 @@ export function backoffDelay(attempt: number, random: () => number = Math.random
   return Math.round(Math.min(MAX_BACKOFF_MS, Math.max(MIN_BACKOFF_MS, jittered)));
 }
 
-/** Validates an incoming message. Unknown types (e.g. retired `surge.detected`) are ignored, not errors. */
+/** Validates an incoming message. Unknown types are ignored, not errors. */
 export function parseWsMessage(raw: unknown): WsMessage | null {
   const envelope = Envelope.safeParse(raw);
   if (!envelope.success) {
@@ -59,6 +62,8 @@ export function parseWsMessage(raw: unknown): WsMessage | null {
   }
   return null;
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 let active: LiveConnection | null = null;
 
@@ -85,6 +90,7 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
   let everSynced = false;
   let fallbackLoading = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let bootstrapTimer: ReturnType<typeof setTimeout> | null = null;
 
   const store = () => useSim.getState();
   const setConnection = (c: ConnectionState) => store().setConnection(c);
@@ -97,7 +103,13 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
     reconnectTimer = null;
   }
 
+  function clearBootstrapTimer() {
+    if (bootstrapTimer !== null) clearTimeout(bootstrapTimer);
+    bootstrapTimer = null;
+  }
+
   function dropTransport() {
+    clearBootstrapTimer();
     generation++;
     syncToken++;
     open = false;
@@ -154,7 +166,12 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
     if (status === "open") {
       if (open) return;
       open = true;
-      void sync("startup");
+      const gen = generation;
+      clearBootstrapTimer();
+      bootstrapTimer = setTimeout(() => {
+        bootstrapTimer = null;
+        if (!stopped && gen === generation && mode === "buffering") void sync("startup");
+      }, BOOTSTRAP_TIMEOUT_MS);
     } else if (status === "closed") {
       dropTransport();
       onFailure();
@@ -171,18 +188,16 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
   }
 
   function onMessage(raw: unknown) {
-    const bootstrap = StateResponse.safeParse(raw);
-    if (bootstrap.success) {
-      try {
-        store().setSnapshot(bootstrap.data);
-        buffer = [];
-        mode = "live";
-        failures = 0;
-        everSynced = true;
-        setConnection("live");
-      } catch (err) {
-        console.error("Couldn't apply the WebSocket bootstrap", err);
+    if (isRecord(raw) && !("type" in raw) && "simulation" in raw) {
+      const bootstrap = StateResponse.safeParse(raw);
+      if (!bootstrap.success) {
+        if (ENV.isDev) {
+          console.error("Contract mismatch: WS bootstrap", bootstrap.error.issues);
+          reportContractIssue("WS bootstrap");
+        }
+        return;
       }
+      applyBootstrap(bootstrap.data);
       return;
     }
     const msg = parseWsMessage(raw);
@@ -193,6 +208,30 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
     }
     buffer.push(msg);
     if (buffer.length > MAX_BUFFER) buffer.shift();
+  }
+
+  /** The snapshot frame that opens every WebSocket connection. */
+  function applyBootstrap(state: StateResponse) {
+    clearBootstrapTimer();
+    // A REST /state that got here first may be newer; never go back to an older snapshot.
+    const s = store();
+    if (mode === "live" && (state.epoch < s.epoch || (state.epoch === s.epoch && state.last_seq < s.lastSeq))) return;
+    syncToken++;
+    try {
+      store().setSnapshot(state);
+    } catch (err) {
+      console.error("Couldn't apply the WebSocket bootstrap", err);
+      return;
+    }
+    const replay = buffer.filter((m) => m.epoch > state.epoch || (m.epoch === state.epoch && m.seq > state.last_seq));
+    buffer = [];
+    mode = "live";
+    failures = 0;
+    setConnection("live");
+    const firstSync = !everSynced;
+    everSynced = true;
+    if (!firstSync) invalidateTimeDependent();
+    applyLive(replay);
   }
 
   function applyLive(msgs: WsMessage[]) {
@@ -289,6 +328,7 @@ export function startLiveConnection({ queryClient, transportFactory }: StartLive
       if (stopped) return;
       stopped = true;
       clearReconnectTimer();
+      clearBootstrapTimer();
       dropTransport();
       if (typeof window !== "undefined") {
         window.removeEventListener("online", onOnline);

@@ -1,30 +1,35 @@
 {
-  "timezone": "America/Vancouver",
-  "data_start": "2025-11-01",
-  "data_end": "2026-08-31",
-  "default_start_time": "2025-12-06T09:00:00-08:00",
-  "allowed_speeds": [1, 60, 300, 900, 3600],
-  "forecast_horizons_hours": [3, 6, 12, 24],
-  "surge_threshold": 1.25,
-  "severity_bands": { "LOW": 1.25, "MEDIUM": 1.5, "HIGH": 1.75 },
-  "late_night": { "start_hour": 0, "end_hour_exclusive": 5 },
-  "route_load_thresholds": { "overcrowded_pct": 85, "spare_pct": 60 },
-  "day_types": [
-    { "id": "mf", "label": "Weekday" },
-    { "id": "sat", "label": "Saturday" },
-    { "id": "sun_hol", "label": "Sunday / holiday" }
+  "data_mode": "fixture",
+  "source_identity": "fixture",
+  "source_version": "development-fixture-v1",
+  "integration_status": "ready",
+  "integration_error": null,
+  "event_window": {
+    "source_identity": "fixture",
+    "source_version": "development-fixture-v1",
+    "window_start": "2026-07-10T09:00:00-07:00",
+    "window_end": "2026-07-10T15:00:00-07:00",
+    "loaded_at": "2026-09-27T01:01:58.557448-07:00",
+    "row_count": 6,
+    "provenance": "bundled deterministic fixture"
+  },
+  "simulation_bounds": {
+    "min_time": "2026-07-10T09:00:00-07:00",
+    "max_time": "2026-07-10T15:00:00-07:00"
+  },
+  "supported_speeds": [
+    1,
+    60,
+    300,
+    900,
+    3600
   ],
-  "presets": [
-    { "id": "ubc-exams", "label": "UBC exam weekend", "hub_id": "ubc", "time": "2025-12-06T09:00:00-08:00", "description": "Exam-weekend surge, 1.72x a normal Saturday" },
-    { "id": "park-royal-boxing-day", "label": "Boxing Day at Park Royal", "hub_id": "park-royal", "time": "2025-12-26T08:00:00-08:00", "description": "Boxing Day shopping, 1.47x" },
-    { "id": "waterfront-jul-25", "label": "Waterfront, Jul 25", "hub_id": "waterfront", "time": "2026-07-25T10:00:00-07:00", "description": "Biggest Waterfront day, 1.83x" },
-    { "id": "normal-weekday", "label": "Normal weekday 1 PM", "hub_id": null, "time": "2026-02-11T10:00:00-08:00", "description": "Baseline midday" },
-    { "id": "saturday-night", "label": "Saturday late night", "hub_id": null, "time": "2026-02-14T22:00:00-08:00", "description": "Nightlife and late-night gaps" }
-  ],
-  "sources": [
-    { "name": "Rogers synthetic cell-tower pings", "used_for": "Demand, origins, surges" },
-    { "name": "TransLink GTFS static (fall 2026)", "url": "https://gtfs-static.translink.ca/gtfs/google_transit.zip", "used_for": "Routes, stops, scheduled departures" },
-    { "name": "TransLink TSPR 2025", "url": "https://www.translink.ca/plans-and-projects/managing-the-transit-network", "used_for": "Route crowding, peak load" }
-  ],
-  "pipeline_refreshed_at": "2026-09-26T08:00:00-07:00"
+  "gtfs_version": "fall-2026",
+  "fleet": {
+    "size": 3,
+    "total_capacity": 150,
+    "source": "generated",
+    "max_buses_per_event": 3
+  },
+  "approval_mode": "MANUAL"
 }

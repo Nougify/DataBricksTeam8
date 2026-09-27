@@ -1,4 +1,0 @@
-{
-  "error": { "code": "TRIP_EXPIRED", "message": "Proposal expired at 10:45 before it was approved." },
-  "trip": { "...": "AdditionalTrip (§0.1)" }
-}

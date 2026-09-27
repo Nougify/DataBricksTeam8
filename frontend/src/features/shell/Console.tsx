@@ -50,7 +50,7 @@ export function Console() {
   useEscapeToClear(isTablet && drawerOpen ? closeDrawer : undefined);
 
   return (
-    <div className="flex min-h-dvh flex-1 flex-col overflow-x-clip md:h-dvh md:min-h-0 md:overflow-hidden">
+    <div className="flex min-h-dvh flex-1 flex-col overflow-x-clip md:h-dvh md:min-h-0 md:flex-none md:overflow-hidden">
       <TopBar />
      <GlobalBanners /> 
 

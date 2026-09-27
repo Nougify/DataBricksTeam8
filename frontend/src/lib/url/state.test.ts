@@ -5,7 +5,7 @@ import { parseUrlState, serializeUrlState } from "./state";
 const defaults = {
   selectedHubId: null,
   tab: "now" as const,
-  originsBasis: "actual" as const,
+  originsBasis: "typical" as const,
   horizon: DEFAULT_HORIZON,
   layers: [...DEFAULT_LAYERS],
   pendingLinkTime: null,
@@ -13,10 +13,10 @@ const defaults = {
 
 describe("parseUrlState", () => {
   it("reads every param", () => {
-    expect(parseUrlState("?hub=ubc&tab=dispatch&basis=typical&h=12&layers=origins,routes&t=2025-12-06T13:00:00-08:00")).toEqual({
+    expect(parseUrlState("?hub=ubc&tab=dispatch&basis=all&h=12&layers=origins,routes&t=2025-12-06T13:00:00-08:00")).toEqual({
       hub: "ubc",
       tab: "dispatch",
-      basis: "typical",
+      basis: "all",
       horizon: 12,
       layers: ["origins", "routes"],
       time: "2025-12-06T13:00:00-08:00",
@@ -55,7 +55,7 @@ describe("serializeUrlState", () => {
       ...defaults,
       selectedHubId: "ubc",
       tab: "origins",
-      originsBasis: "typical",
+      originsBasis: "all",
       horizon: 24,
       layers: ["routes", "origins"],
     });
@@ -63,7 +63,7 @@ describe("serializeUrlState", () => {
     expect(parseUrlState(search)).toMatchObject({
       hub: "ubc",
       tab: "origins",
-      basis: "typical",
+      basis: "all",
       horizon: 24,
       layers: ["origins", "routes"],
     });

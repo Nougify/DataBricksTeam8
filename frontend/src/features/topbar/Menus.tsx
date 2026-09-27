@@ -9,7 +9,6 @@ import { CalendarDays, Ellipsis, Info, Menu, RotateCcw, Unplug } from "lucide-re
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -21,13 +20,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useMeta } from "@/lib/api/hooks";
 import { useSim } from "@/lib/live/store";
 import { cn } from "@/lib/utils";
 import { canDropConnection, dropConnection, usePresetJump, useResetDemo } from "./actions";
 import {
-  AUTO_PAUSE_LABEL,
-  AutoPauseSwitch,
+  AUTO_PAUSE_TOOLTIP,
+  AutoPauseIndicator,
+  autoPauseText,
   DatePicker,
   DatePickerDialog,
   PresetItems,
@@ -40,7 +39,6 @@ import { SpeedControl } from "./Transport";
 
 /** Tablet (768–1279 px) overflow menu. */
 export function OverflowMenu({ className }: { className?: string }) {
-  const meta = useMeta();
   const hasClock = useSim((s) => s.clock !== null);
   const setAboutOpen = useSim((s) => s.setAboutOpen);
   const { jumpToPreset, isPending: jumping } = usePresetJump();
@@ -60,26 +58,23 @@ export function OverflowMenu({ className }: { className?: string }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 rounded-xl p-1.5 shadow-float">
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={!meta.data || jumping} className="px-2 py-1.5">
+            <DropdownMenuSubTrigger disabled={!hasClock || jumping} className="px-2 py-1.5">
               Presets
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-80 max-w-[calc(100vw-2rem)] rounded-xl p-1.5 shadow-float">
-              {meta.data && <PresetItems presets={meta.data.presets} onSelect={jumpToPreset} />}
+              <PresetItems onSelect={jumpToPreset} />
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuItem disabled={!hasClock} onSelect={() => setDateOpen(true)} className="px-2 py-1.5">
             <CalendarDays aria-hidden />
             Go to date
           </DropdownMenuItem>
-          <DropdownMenuCheckboxItem
-            checked={autoPause.checked}
-            disabled={autoPause.disabled}
-            onCheckedChange={autoPause.setChecked}
-            onSelect={(e) => e.preventDefault()}
-            className="py-1.5 pl-2"
-          >
-            {AUTO_PAUSE_LABEL}
-          </DropdownMenuCheckboxItem>
+          {autoPause !== null && (
+            <DropdownMenuItem disabled title={AUTO_PAUSE_TOOLTIP} className="flex-col items-start gap-0.5 px-2 py-1.5">
+              <span>{autoPauseText(autoPause)}</span>
+              <span className="text-xs text-muted-foreground">Set on the backend</span>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="px-2 py-1.5">Theme</DropdownMenuSubTrigger>
@@ -154,7 +149,7 @@ export function PhoneMenu({ className }: { className?: string }) {
             <PresetsMenu fullWidth />
             <DatePicker fullWidth />
           </MenuSection>
-          <AutoPauseSwitch className="min-h-11" />
+          <AutoPauseIndicator className="min-h-11" />
           <MenuSection title="Theme">
             <ThemeSegmented />
           </MenuSection>

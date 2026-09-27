@@ -3,7 +3,7 @@
 import { APP } from "@/config/app";
 import { cn } from "@/lib/utils";
 import { OverflowMenu, PhoneMenu } from "./Menus";
-import { AutoPauseSwitch, DatePicker, PresetsMenu, ResetDemoButton } from "./ScenarioControls";
+import { AutoPauseIndicator, DatePicker, PresetsMenu, ResetDemoButton } from "./ScenarioControls";
 import { SimClock } from "./SimClock";
 import { AboutButton, ConnectionStatus, MockBadge, ThemeToggle } from "./StatusControls";
 import { PlayPauseButton, SpeedControl } from "./Transport";
@@ -50,7 +50,7 @@ export function TopBar() {
         <div className="hidden items-center gap-3 xl:col-span-2 xl:col-start-2 xl:row-start-2 xl:flex xl:h-10 xl:pb-1 min-[1760px]:h-auto min-[1760px]:pb-0">
           <PresetsMenu />
           <DatePicker />
-          <AutoPauseSwitch className="ml-1" />
+          <AutoPauseIndicator className="ml-1" />
           <ResetDemoButton />
         </div>
 
