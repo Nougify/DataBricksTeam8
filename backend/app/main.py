@@ -32,7 +32,7 @@ from app.services.clock import (
     SystemMonotonicTimeSource,
     initial_clock,
 )
-from app.services.coordinator import MutationCoordinator
+from app.services.coordinator import EpochConflictError, MutationCoordinator
 from app.services.events import InMemoryEventSink
 from app.services.movement import MovementLifecycleService
 from app.services.proposals import (
@@ -422,7 +422,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             result = application.state.runtime.clock.seek(request.time)
         except ReplayDataError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        except ReplayConflictError as exc:
+        except (ReplayConflictError, EpochConflictError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

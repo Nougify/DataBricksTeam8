@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from app.config import Settings
 from app.data.reader import EventReader
-from app.data.store import EventWindowStore
+from app.data.store import DataWindowConflictError, EventWindowStore
 from app.domain.decisions import HumanDecision, HumanDecisionAction
 from app.domain.models import ClockStatus, DispatchEvent, SimulationClock
 from app.domain.types import AdditionalTripId, VancouverDateTime
@@ -67,7 +67,7 @@ class DeterministicSeekService:
 
     def seek(self, target: VancouverDateTime) -> SimulationClock:
         snapshot = self._coordinator.snapshot()
-        reader = self._reader_for(target)
+        reader, data_revision = self._reader_for(target)
         replay_clock = self._replay_clock(snapshot.clock, reader, target)
         retained_decisions = tuple(
             decision for decision in snapshot.decisions if decision.decided_at <= target
@@ -82,14 +82,21 @@ class DeterministicSeekService:
             max_time=final_clock.max_time,
         )
 
-        committed = self._coordinator.replace_state(
-            entities,
-            simulation_time=target,
-            expected_epoch=snapshot.epoch,
-            clock_template=final_clock,
-            decisions=retained_decisions,
-        )
-        self._data.install_reader(reader)
+        try:
+            committed = self._data.install_reader_after(
+                reader,
+                expected_revision=data_revision,
+                commit=lambda: self._coordinator.replace_state(
+                    entities,
+                    simulation_time=target,
+                    expected_epoch=snapshot.epoch,
+                    expected_revision=snapshot.revision,
+                    clock_template=final_clock,
+                    decisions=retained_decisions,
+                ),
+            )
+        except DataWindowConflictError as exc:
+            raise ReplayConflictError("event window changed during replay") from exc
         self._activation.set_reader(reader)
         self._clock.replace_boundaries(
             future,
@@ -98,14 +105,14 @@ class DeterministicSeekService:
         )
         return committed.clock
 
-    def _reader_for(self, target: VancouverDateTime) -> EventReader:
-        current = self._data.reader()
+    def _reader_for(self, target: VancouverDateTime) -> tuple[EventReader, int]:
+        current, revision = self._data.reader_snapshot()
         metadata = current.window.metadata
         if (
             metadata.window_start <= self._settings.simulation_min_time
-            and target <= metadata.window_end
+            and target < metadata.window_end
         ):
-            return current
+            return current, revision
         try:
             raw = self._data.prepare_window(
                 self._settings.event_window_start,
@@ -113,11 +120,14 @@ class DeterministicSeekService:
             )
             candidate = EventReader(self._mapper.resolve_window(raw.window))
         except Exception as exc:
+            self._data.record_failure(exc)
             raise ReplayDataError("event window reload failed") from exc
         metadata = candidate.window.metadata
-        if not metadata.window_start <= target <= metadata.window_end:
-            raise ReplayDataError("loaded event window does not cover seek target")
-        return candidate
+        if not metadata.window_start <= target < metadata.window_end:
+            error = ReplayDataError("loaded event window does not cover seek target")
+            self._data.record_failure(error)
+            raise error
+        return candidate, revision
 
     def _replay_clock(
         self,
@@ -128,7 +138,7 @@ class DeterministicSeekService:
         metadata = reader.window.metadata
         minimum = max(self._settings.simulation_min_time, metadata.window_start)
         maximum = min(self._settings.simulation_max_time, metadata.window_end)
-        if not minimum <= target <= maximum:
+        if not minimum <= target < metadata.window_end or target > maximum:
             raise ReplayDataError("seek target is outside validated event coverage")
         return current.model_copy(
             update={

@@ -471,9 +471,23 @@ Seeking to `T`:
 4. Replays event activation and automatic lifecycle boundaries through `T` in
    canonical order.
 5. Reapplies recorded human decisions whose simulation timestamps are at or
-   before `T`; decisions after `T` are discarded.
+   before `T`; decisions after `T` are permanently discarded.
 6. Atomically installs rebuilt state and emits `system.reset` followed by a fresh
    snapshot.
+
+Replay occurs against an isolated copy of the immutable initial fleet. Historical
+transition events and auto-pause requests are not published; only the successful
+epoch reset is emitted. The future semantic-boundary queue is replaced in full so
+callbacks from the prior epoch cannot mutate rebuilt state. Effective manual
+approvals and rejections are recorded in the same coordinator transaction as their
+state change and replayed by timestamp, boundary priority, and stable decision
+order.
+
+Event windows are half-open. A seek target must be strictly before the validated
+window end. Candidate source loading and recommendation mapping complete before
+live mutation, and reader/coordinator revisions prevent concurrent refreshes or
+commands from being overwritten. Query, mapping, replay, publication, or revision
+failure preserves the prior epoch and simulation state.
 
 Given identical event rows/query metadata, GTFS version, fleet configuration,
 backend settings, and recorded decisions, seek must reproduce identical state and

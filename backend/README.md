@@ -79,6 +79,15 @@ deadhead, GTFS service, and return paths. Completed trips retain their bus throu
 the return leg; the bus becomes available at home, while cancellation releases it
 at its current projected location.
 
+## Deterministic seek
+
+Clock seek rebuilds from the configured initial fleet and replays event,
+proposal-expiry, recorded manual-decision, and movement boundaries through the
+target. Successful seek installs a paused next epoch and emits one reset; replay
+transitions are not published individually. Seeking backward permanently discards
+manual decisions after the target. Failed source loads, replay conflicts, or
+concurrent state/window changes leave the previous simulation state intact.
+
 ## Checks
 
 ```sh

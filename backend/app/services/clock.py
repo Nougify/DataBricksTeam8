@@ -334,7 +334,12 @@ class SimulationClockController:
 
     def seek(self, at: VancouverDateTime) -> SimulationClock:
         with self._lock:
-            if not self._seek_min_time <= at <= self._seek_max_time:
+            at_utc = at.astimezone(UTC)
+            if not (
+                self._seek_min_time.astimezone(UTC)
+                <= at_utc
+                <= self._seek_max_time.astimezone(UTC)
+            ):
                 raise ValueError("seek time must be within simulation bounds")
             updated = (
                 self._seek_handler(at)

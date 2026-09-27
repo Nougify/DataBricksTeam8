@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime
 
 import pytest
@@ -5,11 +6,17 @@ import pytest
 from app.config import Settings
 from app.data.adapters import FixtureEventSource
 from app.data.models import EventWindow
+from app.data.store import IntegrationStatus
 from app.domain.decisions import HumanDecisionAction, pending_decision
 from app.domain.events import EventType
 from app.domain.models import AdditionalTripStatus, BusStatus, EventStatus
 from app.domain.types import AdditionalTripId, BusId, DispatchEventId
-from app.services import Mutation, ReplayConflictError, ReplayDataError
+from app.services import (
+    EpochConflictError,
+    Mutation,
+    ReplayConflictError,
+    ReplayDataError,
+)
 from tests.services.test_movement import advance_seconds
 from tests.services.test_proposals import (
     END,
@@ -145,12 +152,15 @@ class ReloadingFixtureSource:
     def __init__(self) -> None:
         self.calls = 0
         self.fail = False
+        self.on_load: Callable[[], None] | None = None
         self.delegate = FixtureEventSource("test-v1")
 
     def load_window(self, start: datetime, end: datetime) -> EventWindow:
         self.calls += 1
         if self.fail:
             raise RuntimeError("source unavailable")
+        if self.on_load is not None:
+            self.on_load()
         return self.delegate.load_window(start, end)
 
 
@@ -184,6 +194,18 @@ def test_failed_window_reload_preserves_state_epoch_and_reader() -> None:
     after = runtime.coordinator.snapshot()
     assert after == before
     assert runtime.data.reader() is reader
+    assert runtime.data.status is IntegrationStatus.DEGRADED
+    assert runtime.data.last_error == "source unavailable"
+
+
+def test_seek_rejects_exclusive_window_end_without_mutating_state() -> None:
+    runtime = make_runtime()
+    before = runtime.coordinator.snapshot()
+
+    with pytest.raises(ReplayDataError, match="does not cover"):
+        runtime.clock.seek(END)
+
+    assert runtime.coordinator.snapshot() == before
 
 
 def test_replay_conflict_preserves_live_state() -> None:
@@ -208,3 +230,26 @@ def test_replay_conflict_preserves_live_state() -> None:
         runtime.clock.seek(datetime(2026, 7, 10, 10, tzinfo=PACIFIC))
 
     assert runtime.coordinator.snapshot() == before
+
+
+def test_concurrent_decision_is_not_overwritten_by_replay_commit() -> None:
+    source = ReloadingFixtureSource()
+    narrow_end = datetime(2026, 7, 10, 10, 30, tzinfo=PACIFIC)
+    runtime = make_runtime(source=source, window_end=narrow_end)
+    activate_first_event(runtime)
+    trip = runtime.coordinator.snapshot().entities.trips.list()[0]
+
+    def reject_during_load() -> None:
+        runtime.proposals.reject(trip.id)
+
+    source.on_load = reject_during_load
+
+    with pytest.raises(EpochConflictError, match="revision"):
+        runtime.clock.seek(datetime(2026, 7, 10, 12, tzinfo=PACIFIC))
+
+    snapshot = runtime.coordinator.snapshot()
+    rejected = snapshot.entities.trips.get(trip.id)
+    assert rejected is not None
+    assert rejected.status is AdditionalTripStatus.REJECTED
+    assert snapshot.epoch == 0
+    assert len(snapshot.decisions) == 1

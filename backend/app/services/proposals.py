@@ -231,10 +231,11 @@ class ProposalService:
         )
 
     def reject(self, trip_id: AdditionalTripId) -> ProposalDecision:
-        return self._coordinator.transact(
+        return self._clock.transact_with_boundaries(
             lambda editor, clock: self.reject_transition(
                 editor, clock, trip_id, record_decision=True
-            )
+            ),
+            lambda decision: decision.registrations,
         )
 
     def approve_transition(

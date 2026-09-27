@@ -103,3 +103,18 @@ def test_v3_detail_and_route_endpoints() -> None:
     assert routes.status_code == 200
     assert routes.json()[0]["shape"]["type"] == "LineString"
     assert route.status_code == 200
+
+
+def test_seek_validates_timestamp_bounds_and_window_coverage() -> None:
+    with TestClient(create_app(Settings())) as client:
+        naive = client.post("/api/v1/clock/seek", json={"time": "2026-07-10T10:00:00"})
+        outside = client.post(
+            "/api/v1/clock/seek", json={"time": "2026-07-10T16:00:00-07:00"}
+        )
+        exclusive_end = client.post(
+            "/api/v1/clock/seek", json={"time": "2026-07-10T15:00:00-07:00"}
+        )
+
+    assert naive.status_code == 422
+    assert outside.status_code == 400
+    assert exclusive_end.status_code == 503

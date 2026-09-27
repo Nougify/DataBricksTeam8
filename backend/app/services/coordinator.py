@@ -27,6 +27,7 @@ class Mutation[ResultT]:
 @dataclass(frozen=True)
 class CoordinatorSnapshot:
     epoch: Epoch
+    revision: int
     last_seq: SequenceNumber
     clock: SimulationClock
     entities: SimulationEntities
@@ -48,6 +49,7 @@ class MutationCoordinator:
         ).freeze()
         self._entities = self._initial_entities
         self._epoch: Epoch = 0
+        self._revision = 0
         if initial_clock.epoch != self._epoch:
             raise ValueError("initial clock epoch must be zero")
         self._clock = initial_clock
@@ -60,6 +62,7 @@ class MutationCoordinator:
         with self._lock:
             return CoordinatorSnapshot(
                 epoch=self._epoch,
+                revision=self._revision,
                 last_seq=self._last_seq,
                 clock=self._clock,
                 entities=self._entities,
@@ -119,6 +122,7 @@ class MutationCoordinator:
             self._next_decision_order += len(appended_decisions)
             if sequenced:
                 self._last_seq = sequenced[-1].seq
+            self._revision += 1
             return mutation.value
 
     def replace_state(
@@ -127,12 +131,18 @@ class MutationCoordinator:
         *,
         simulation_time: VancouverDateTime,
         expected_epoch: Epoch | None = None,
+        expected_revision: int | None = None,
         clock_template: SimulationClock | None = None,
         decisions: tuple[HumanDecision, ...] | None = None,
     ) -> CoordinatorSnapshot:
         StateEditor(candidate).freeze()
         with self._lock:
             self._check_epoch(expected_epoch)
+            if expected_revision is not None and expected_revision != self._revision:
+                raise EpochConflictError(
+                    f"expected revision {expected_revision}, current revision is "
+                    f"{self._revision}"
+                )
             next_epoch: Epoch = self._epoch + 1
             candidate_clock = (clock_template or self._clock).model_copy(
                 update={
@@ -165,9 +175,11 @@ class MutationCoordinator:
                 self._decisions = previous_decisions
                 raise
             self._epoch = next_epoch
+            self._revision += 1
             self._last_seq = sequenced[-1].seq
             return CoordinatorSnapshot(
                 epoch=self._epoch,
+                revision=self._revision,
                 last_seq=self._last_seq,
                 clock=self._clock,
                 entities=self._entities,

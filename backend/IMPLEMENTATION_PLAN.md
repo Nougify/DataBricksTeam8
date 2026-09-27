@@ -27,16 +27,18 @@ Completed foundations:
 - Coordinator-owned dispatch, deadhead, wait, service, completion, and return
   boundaries with high-speed catch-up, simulation-time location/heading
   interpolation, cancellation, and exactly-once fleet release.
+- Off-state deterministic seek replay with coordinator-owned human decision
+  history, atomic event-window/state replacement, stale-boundary removal, and one
+  reset event per successful epoch change.
 - Event, bus, trip, and route read endpoints, expanded metadata, and epoch-reset
   seek.
 
 Partial or superseded implementation still present:
 
-- Seek rebuilds event activation but does not replay movement or recorded decisions.
 - The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **09 - Deterministic Seek**. Do not build
-additional forecast/origin/analytics endpoints against the superseded contract.
+The next implementation step is **10 - REST And WebSocket**. Do not build additional
+forecast/origin/analytics endpoints against the superseded contract.
 
 ### 1.1 Implementation Status
 
@@ -50,7 +52,7 @@ additional forecast/origin/analytics endpoints against the superseded contract.
 | 06 Proposal and approval | Complete | Deterministic creation, reservation, expiry, decisions, automatic mode, and caps |
 | 07 Routing foundations | Complete | Typed deterministic deadhead, GTFS service, return, and lifecycle plans |
 | 08 Movement lifecycle | Complete | Atomic progression, interpolation, completion, cancellation, and return release |
-| 09 Deterministic seek | Partial | Replay boundaries and recorded human decisions through the target |
+| 09 Deterministic seek | Complete | Atomic replay, decision cutoff, window replacement, stable state, and reset publication |
 | 10 REST and WebSocket | Partial | Canonical v3 trip schemas, `/ws`, reconnect, gap, and reset handling |
 | 11 Real-data gate | Not started | Validate selected profile, warehouse, source, mappings, and demo window |
 | 12 Demo acceptance | Not started | Operational frontend, end-to-end automation, Docker smoke tests, and CI |
@@ -59,16 +61,14 @@ additional forecast/origin/analytics endpoints against the superseded contract.
 
 Complete the following in dependency order:
 
-1. Make seek rebuild state and replay all canonical boundaries and eligible human
-   decisions through the target while preserving old state on load/replay failure.
-2. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+1. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
    reconnect, gap recovery, reset, and error events.
-3. Replace the root health-only frontend with clock controls, event/proposal
+2. Replace the root health-only frontend with clock controls, event/proposal
     decisions, fleet movement, trip lifecycle, source provenance, and reconnect
     handling. Add the Nginx WebSocket proxy.
-4. Select an explicit Databricks profile and validate the live/exported event
+3. Select an explicit Databricks profile and validate the live/exported event
     contract, table/view, warehouse, aliases, source version policy, and demo range.
-5. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
+4. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
@@ -330,6 +330,14 @@ completion, cancellation, return, high-speed jumps, and exactly-once release.
 ### 09 - Deterministic Seek
 
 **Depends on:** 02, 03, 06, and 08.
+
+**Status:** Complete. Seek stages a fresh editor from the immutable initial fleet,
+replays event activation, proposal expiry, recorded manual decisions, and movement
+milestones in canonical timestamp/priority/order sequence, then validates future
+boundaries before publishing one reset. Effective decisions are journaled in their
+state transaction; seeking backward permanently discards decisions after the
+target. Source reload, replay, reader-version, or coordinator-revision conflicts
+leave the previous live state and boundary queue intact.
 
 - Pause and increment epoch before rebuilding.
 - Reuse the loaded event window when it covers the target.
