@@ -1,5 +1,5 @@
-// The product name is a placeholder. This is the only place it lives.
+// The product name lives here so page metadata and visible branding stay in sync.
 export const APP = {
-  name: "(changelaterBUSALLOVERME)",
+  name: "BusAllOverMe",
   tagline: "",
 } as const;
