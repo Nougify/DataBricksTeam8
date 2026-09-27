@@ -14,7 +14,7 @@ Where this file and the spec disagree, **this file wins**. Where it's silent, th
 
 ## Identity
 
-- `src/config/app.ts`: name is exactly `(changelaterBUSALLOVERME)`. The tagline is an empty string, so render nothing for an empty tagline.
+- `src/config/app.ts`: name is exactly `CrowdCost`. The tagline is an empty string, so render nothing for an empty tagline.
 
 ## Seed data
 
