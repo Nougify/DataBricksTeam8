@@ -4,26 +4,90 @@ This plan implements `backend/SPEC.md` v3.0. It replaces the former multi-table
 forecast snapshot plan with one bounded Databricks dispatch-event query and a
 backend-owned simulated fleet.
 
-## 1. Starting Point
+## 1. Current State
 
-Reusable implementation already present:
+Completed foundations:
 
-- FastAPI service, settings validation, CORS, health, and Docker baseline.
-- Immutable domain-model conventions and Vancouver timestamp validation.
-- Coordinator, repositories, event sequencing, and bounded clock foundations.
-- GTFS parsing/index structures and replaceable routing foundations.
-- Explicit fixture/export/Databricks source-mode patterns and atomic store ideas.
+- FastAPI service, validated settings, CORS, health, Docker baseline, coordinator,
+  event sequencing, bounded clock, GTFS index, and replaceable routing.
+- Canonical dispatch-event imports with proactive/reactive timing, derived surge
+  ratio, suggested-bus rounding, deterministic grouping, source metadata, and
+  strict row validation.
+- Fixture, exported-event, and bounded parameterized Databricks source modes with
+  atomic event-window replacement and no fallback after source failure.
+- Actionable-time visibility masking in `/state` and dispatch-event reads.
+- Basic source hub and route alias resolution against backend GTFS.
+- Deterministic backend-owned fleet initialization and immutable reset state.
+- Event, bus, trip, and route read endpoints, expanded metadata, epoch-reset seek,
+  and atomic idempotent approval/rejection for proposals that already exist.
 
-Superseded implementation that must be migrated before feature work continues:
+Partial or superseded implementation still present:
 
-- `DataSnapshot` and its forecast, actual, baseline, origin, route-load,
-  analytical-record, and evaluation collections.
-- The eleven-query `DatabricksSnapshotAdapter`.
-- Forecast-vintage readers and fixture assumptions.
-- Clock boundaries and future APIs based on hourly forecasts or observed demand.
+- Event visibility is correct, but activation is not a coordinator-owned boundary
+  and does not create proposals or mutate event status.
+- Hub and route aliases resolve, but destination, direction, service-pattern, and
+  service-date feasibility do not.
+- Generated fixture buses work, but `fleet_config_path` is not loaded or validated.
+- Approval and rejection work, but no production service creates, expires, or
+  automatically approves proposals.
+- Seek resets state but does not replay events, movement, or recorded decisions.
+- Legacy v2 forecast/surge models, repository links, API schemas, and event names
+  remain in the runtime.
+- The root frontend remains a health-only page and `/ws` is not implemented.
 
-The next implementation step is **01 - Event contract migration**. Do not build
-additional forecast/origin/analytics endpoints against the superseded contract.
+The next implementation step is **03 - Event Repository, Activation, And Clock
+Boundaries**, followed by completion of **04-07** before movement and replay. Do
+not build additional forecast/origin/analytics endpoints against the superseded
+contract.
+
+### 1.1 Implementation Status
+
+| Chunk | Status | Work left |
+|---|---|---|
+| 01 Event contract migration | Mostly complete | Migrate trips/repositories from `Surge` and `surge_id` to dispatch events |
+| 02 Filtered event adapters and cache | Mostly complete | Finalize live query details and test real export/Databricks rows |
+| 03 Event repository and activation | Partial | Coordinator activation boundaries, deduplication, status changes, and events |
+| 04 GTFS recommendation mapping | Partial | Destination, direction, pattern, and service-date resolution |
+| 05 Backend fleet configuration | Partial | File-backed fleet loading and validation |
+| 06 Proposal and approval | Partial | Proposal creation, reservation, expiry, automatic approval, and fleet caps |
+| 07 Routing foundations | Partial | Deadhead, service, and return itinerary composition |
+| 08 Movement lifecycle | Not started | Bus/trip progression, interpolation, completion, and release |
+| 09 Deterministic seek | Partial | Replay boundaries and recorded human decisions through the target |
+| 10 REST and WebSocket | Partial | Canonical v3 trip schemas, `/ws`, reconnect, gap, and reset handling |
+| 11 Real-data gate | Not started | Validate selected profile, warehouse, source, mappings, and demo window |
+| 12 Demo acceptance | Not started | Operational frontend, end-to-end automation, Docker smoke tests, and CI |
+
+### 1.2 Remaining Critical Path
+
+Complete the following in dependency order:
+
+1. Replace the runtime's legacy `Surge` entity and `surge_id` links with canonical
+   `DispatchEvent` and `dispatch_event_id` entities. Update repositories, event
+   payloads, serializers, and validation together.
+2. Register deterministic event activation and target-time clock boundaries. Store
+   active event state in the coordinator, deduplicate activation, update status,
+   and publish changes only after commit.
+3. Finish source recommendation mapping for destinations, direction, service
+   patterns, and representative service dates. Preserve typed visible failures.
+4. Load and validate explicit fleet configuration, including unique IDs, positive
+   capacities, known initial locations, home locations, and empty/custom fleets.
+5. Implement event-to-proposal creation: recommendation fallback, bus ranking,
+   suggestion/policy/fleet caps, stable IDs, atomic reservation, timeout expiry,
+   rollback, and automatic approval mode.
+6. Compose deadhead, service, and return paths and times. Apply proactive lateness
+   policy without rejecting normal reactive post-event arrivals.
+7. Implement movement boundaries and interpolation through reserved, deadheading,
+   waiting, in-service, returning, completed, and available states.
+8. Make seek rebuild state and replay all canonical boundaries and eligible human
+   decisions through the target while preserving old state on load/replay failure.
+9. Finish REST schemas and implement `/ws` bootstrap, epoch/sequence ordering,
+   reconnect, gap recovery, reset, and error events.
+10. Replace the root health-only frontend with clock controls, event/proposal
+    decisions, fleet movement, trip lifecycle, source provenance, and reconnect
+    handling. Add the Nginx WebSocket proxy.
+11. Select an explicit Databricks profile and validate the live/exported event
+    contract, table/view, warehouse, aliases, source version policy, and demo range.
+12. Add end-to-end event-to-return, WebSocket, Docker, and CI acceptance coverage.
 
 ## 2. Working Rules
 
